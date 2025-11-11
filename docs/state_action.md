@@ -6,13 +6,11 @@
 
 ## States
 
-| Feature         | Description                                 | Categories                               |
-| --------------- | ------------------------------------------- | ---------------------------------------- |
-| `current_phase` | Which street has green light                | 0 = NS (North-South), 1 = EW (East-West) |
-| `avg_wait_NS`   | Average waiting time on queue for NS-street | 0: <5s, 1: 5–15s, 2: 15–30s, 3: >30s     |
-| `avg_wait_EW`   | Average waiting time on queue for EW-street | Same categories                          |
-| `max_wait_NS`   | Waiting time of car waiting the longest NS  | 0: <5s, 1: 5–15s, 2: 15–30s, 3: >30s     |
-| `max_wait_EW`   | Waiting time of car waiting the longest EW  | Same Categories                          |
+| Feature         | Description                                | Categories                               |
+| --------------- | ------------------------------------------ | ---------------------------------------- | --- |
+| `current_phase` | Which street has green light               | 0 = NS (North-South), 1 = EW (East-West) |
+| `sq_wait_NS`    | Sum of squared waiting times for NS-street | 0: = 0, 1: 1-100, 2: 101–400, 3: >400    |
+| `sq_wait_EW`    | Sum of squared waiting times for EW-street | Same categories                          |     |
 
 ## Actions
 
