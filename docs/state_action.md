@@ -7,10 +7,10 @@
 ## States
 
 | Feature         | Description                                | Categories                               |
-| --------------- | ------------------------------------------ | ---------------------------------------- | --- |
+| --------------- | ------------------------------------------ | ---------------------------------------- |
 | `current_phase` | Which street has green light               | 0 = NS (North-South), 1 = EW (East-West) |
 | `sq_wait_NS`    | Sum of squared waiting times for NS-street | 0: = 0, 1: 1-100, 2: 101–400, 3: >400    |
-| `sq_wait_EW`    | Sum of squared waiting times for EW-street | Same categories                          |     |
+| `sq_wait_EW`    | Sum of squared waiting times for EW-street | Same categories                          |
 
 ## Actions
 
