@@ -22,7 +22,7 @@ ACCELERATION = 2  # m/s^2
 
 
 # 2. Reinforcement Learning Settings
-# Q-Learning Hyperparameters
+# Q-Learning Parameters
 ALPHA = 0.1  # Learning Rate
 GAMMA = 0.95  # Discount Factor
 
@@ -31,15 +31,8 @@ EPSILON_START = 1.0  # Initial exploration rate
 EPSILON_MIN = 0.01
 EPSILON_DECAY = 0.995  # How fast epsilon decreases per episode
 
-# Discretization Buckets
-# We simplify the queue length into categories: 0=Empty, 1=Low, 2=Medium, 3=High
-# If queue is < 2 cars -> cat 0. If < 5 -> cat 1, etc.
-QUEUE_BUCKETS = [
-    0,
-    100,
-    400,
-    float("inf"),
-]  # Sum of squared waiting times thresholds for categorization
+# Discretization Buckets for Sum of Squared Waiting Times
+SQ_WAIT_BUCKETS = [1, 101, 401]
 
 
 # 3. Training Settings
