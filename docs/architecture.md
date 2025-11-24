@@ -2,7 +2,7 @@
 
 ## What we're building
 
-At a high level, we want to train a reinforcement‑learning (RL) agent to control the traffic lights in a simple intersection in simulation. The agent will observe the state of the intersection (cars waiting, current phase) and decide whether to stay in the current phase or switch to the other phase. We will start with a Tabular Q-Learning approach on a single intersection and add complexity later. The core goal is to minimize the delay using a squared wait-time penalty. In a nutshell, our system is an RL environment plus an agent.
+At a high level, we are developing a reinforcement‑learning (RL) agent to control the traffic lights in a simple intersection in simulation. The agent will observe the state of the intersection (cars waiting, current phase) and decide whether to stay in the current phase or switch to the other phase. We will start with a Tabular Q-Learning approach on a single intersection and add complexity later. The core goal is to minimize the delay using a squared wait-time penalty. In a nutshell, our system is an RL environment plus an agent.
 
 ## Pieces of the code
 
@@ -32,5 +32,6 @@ For now we plan to organise the code like this:
 - `src/agent.py` – the RL agent implementation.
 - `src/train.py` – the training loop and hyperparameters.
 - `src/evaluate.py` – scripts for testing and visualising results.
-  This document is a work in progress.
 - `src/visualize.py` –> maybe use a jupyter notebook instead
+
+This document is a work in progress.
