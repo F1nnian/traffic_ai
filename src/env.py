@@ -1,11 +1,15 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+import random
 from src.config import (
     DELTA_T,
     MIN_PHASE_DURATION,
     YELLOW_PHASE_DURATION,
     SQ_WAIT_BUCKETS,
+    TRAFFIC_INTENSITY,
+    ROAD_LENGTH,
+    MAX_SPEED
 )
 
 
@@ -99,7 +103,21 @@ class TrafficEnv(gym.Env):
         return np.array([p, bucket_ns, bucket_ew], dtype=np.int32)
 
     def _spawn_cars(self):
-        pass
+        # Try to spawn for North-South
+        if random.random() < (TRAFFIC_INTENSITY * DELTA_T):
+            self.lanes["NS"].append({
+                "position": float(ROAD_LENGTH),
+                "wait_time": 0.0,
+                "speed": MAX_SPEED
+            })
+
+        # Try to spawn for East-West
+        if random.random() < (TRAFFIC_INTENSITY * DELTA_T):
+            self.lanes["EW"].append({
+                "position": float(ROAD_LENGTH),
+                "wait_time": 0.0,
+                "speed": MAX_SPEED
+            })
 
     def _move_cars(self):
         pass
