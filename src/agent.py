@@ -1,70 +1,71 @@
 import numpy as np
-from src.config import ALPHA, GAMMA, EPSILON_START
-
+import random
 
 class QLearningAgent:
-    """
-    Q-learning agent for traffic light control.
-    Uses a Q-table with shape (phase, bucketNS, bucketEW, action).
-    """
-
-    def __init__(self, alpha=ALPHA, gamma=GAMMA, epsilon=EPSILON_START):
-        # Q-table dimensions:
-        # phase: 0 or 1                  (2)
-        # bucketNS: 0,1,2,3              (4)
-        # bucketEW: 0,1,2,3              (4)
-        # action: stay or switch         (2)
-        self.q = np.zeros((2, 4, 4, 2))
-
+    def __init__(self, state_dim, action_dim, alpha=0.1, gamma=0.99, epsilon=1.0):
+        """
+        Initializes the Q-Learning Agent.
+        
+        Args:
+            state_dim (tuple): Shape of the state space (e.g., (2, 4, 4)).
+            action_dim (int): Number of actions (e.g., 2).
+            alpha (float): Learning rate.
+            gamma (float): Discount factor.
+            epsilon (float): Initial exploration probability.
+        """
+        self.state_dim = state_dim
+        self.action_dim = action_dim
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
+        
+        # Initialize Q-Table with zeros
+        # We use a numpy array of shape (*state_dim, action_dim)
+        # Example: (2, 4, 4, 2)
+        self.q_table = np.zeros(state_dim + (action_dim,))
 
-    # -----------------------------------------------------
-    # ACTION SELECTION (ε-greedy)
-    # -----------------------------------------------------
-    def act(self, state):
+    def act(self, state, explore=True):
         """
-        Select an action using epsilon-greedy strategy.
-        state = (phase, bucketNS, bucketEW)
-        returns: action 0 or 1
+        Chooses an action based on the state.
+        
+        Args:
+            state (tuple): Current state indices, e.g., (0, 2, 3).
+            explore (bool): Whether to use epsilon-greedy exploration.
+            
+        Returns:
+            int: The chosen action (0 or 1).
         """
-        phase, b_ns, b_ew = state
+        # SKELETON LOGIC:
+        # If explore is True, we pick random action sometimes.
+        # Otherwise, we pick the best action from q_table.
+        
+        # For now, let's just return a random action so the code runs
+        return random.choice([0, 1])
 
-        # Exploration
-        if np.random.random() < self.epsilon:
-            return np.random.randint(2)  # random action (0 or 1)
-
-        # Exploitation
-        return int(np.argmax(self.q[phase, b_ns, b_ew]))
-
-    # -----------------------------------------------------
-    # Q-LEARNING UPDATE
-    # -----------------------------------------------------
-    def update(self, state, action, reward, next_state):
+    def update(self, state, action, reward, next_state, done):
         """
-        Update Q-table using the Bellman equation.
+        Updates the Q-Table using the Bellman Equation.
+        
+        Args:
+            state (tuple): Previous state.
+            action (int): Action taken.
+            reward (float): Reward received.
+            next_state (tuple): New state.
+            done (bool): Whether episode ended.
         """
-        phase, b_ns, b_ew = state
-        next_phase, nb_ns, nb_ew = next_state
+        # TODO: Implement Q-Learning Math here
+        # Q(s,a) = Q(s,a) + alpha * [r + gamma * max Q(s',a') - Q(s,a)]
+        pass
 
-        current_q = self.q[phase, b_ns, b_ew, action]
-        max_next_q = np.max(self.q[next_phase, nb_ns, nb_ew])
+    def save(self, filepath):
+        """Saves the Q-table to a file."""
+        np.save(filepath, self.q_table)
+        print(f"Model saved to {filepath}")
 
-        # TD target and TD error
-        td_target = reward + self.gamma * max_next_q
-        td_error = td_target - current_q
-
-        # Update rule
-        self.q[phase, b_ns, b_ew, action] += self.alpha * td_error
-
-    # -----------------------------------------------------
-    # SAVE / LOAD
-    # -----------------------------------------------------
-    def save(self, path):
-        """Save the Q-table to a .npy file."""
-        np.save(path, self.q)
-
-    def load(self, path):
-        """Load Q-table from a .npy file."""
-        self.q = np.load(path)
+    def load(self, filepath):
+        """Loads the Q-table from a file."""
+        try:
+            self.q_table = np.load(filepath)
+            print(f"Model loaded from {filepath}")
+        except FileNotFoundError:
+            print("No saved model found, starting from scratch.")
