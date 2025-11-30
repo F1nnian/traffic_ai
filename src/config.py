@@ -32,7 +32,7 @@ EPSILON_MIN = 0.01
 EPSILON_DECAY = 0.995  # How fast epsilon decreases per episode
 
 # Discretization Buckets for Sum of Squared Waiting Times
-SQ_WAIT_BUCKETS = [1, 101, 401]
+SQ_WAIT_BUCKETS = [1, 900, 3600]
 
 
 # 3. Training Settings
