@@ -38,6 +38,7 @@ class QLearningAgent:
         # SKELETON LOGIC:
         # If explore is True, we pick random action sometimes.
         # Otherwise, we pick the best action from q_table.
+<<<<<<< HEAD
         if explore and random.random() < self.epsilon:
             return random.randint(0, self.action_dim - 1)  # Explore: random action
         else:
@@ -47,6 +48,11 @@ class QLearningAgent:
         
         # For now, let's just return a random action so the code runs
         #return random.choice([0, 1])
+=======
+        
+        # For now, let's just return a random action so the code runs
+        return random.choice([0, 1])
+>>>>>>> 1729526e7cb33125515ad17b8d6dd008feb2a672
 
     def update(self, state, action, reward, next_state, done):
         """
@@ -60,6 +66,7 @@ class QLearningAgent:
             done (bool): Whether episode ended.
         """
         # TODO: Implement Q-Learning Math here
+<<<<<<< HEAD
         state_indices = tuple(state)
         next_state_indices = tuple(next_state)
         
@@ -67,6 +74,10 @@ class QLearningAgent:
         td_target = reward + self.gamma * self.q_table[next_state_indices + (best_next_action,)] * (1 - done)
         td_error = td_target - self.q_table[state_indices + (action,)]
         self.q_table[state_indices + (action,)] += self.alpha * td_error
+=======
+        # Q(s,a) = Q(s,a) + alpha * [r + gamma * max Q(s',a') - Q(s,a)]
+        pass
+>>>>>>> 1729526e7cb33125515ad17b8d6dd008feb2a672
 
     def save(self, filepath):
         """Saves the Q-table to a file."""
@@ -79,4 +90,8 @@ class QLearningAgent:
             self.q_table = np.load(filepath)
             print(f"Model loaded from {filepath}")
         except FileNotFoundError:
+<<<<<<< HEAD
             print("No saved model found, starting from scratch.")
+=======
+            print("No saved model found, starting from scratch.")
+>>>>>>> 1729526e7cb33125515ad17b8d6dd008feb2a672
