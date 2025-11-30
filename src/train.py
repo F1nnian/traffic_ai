@@ -7,12 +7,19 @@ from src.config import (
     MODELS_DIR,
     EPSILON_MIN,
     EPSILON_DECAY,
+    ALPHA,
+    GAMMA,
+    EPSILON_START,
 )
 
 
 def train():
     env = TrafficEnv()
-    agent = QLearningAgent()
+    # Build agent using environment spaces to match agent constructor
+    # observation_space.nvec -> array like [2,4,4]
+    state_dim = tuple(env.observation_space.nvec.tolist())
+    action_dim = int(env.action_space.n)
+    agent = QLearningAgent(state_dim, action_dim, alpha=ALPHA, gamma=GAMMA, epsilon=EPSILON_START)
 
     episode_rewards = []
 
@@ -22,22 +29,27 @@ def train():
         total_reward = 0.0
 
         for _ in range(MAX_STEPS_PER_EPISODE):
-            action = agent.act(state)
+            action = agent.act(state, explore=True)
             next_obs, reward, terminated, truncated, _ = env.step(action)
             next_state = tuple(next_obs)
 
-            agent.update(state, action, reward, next_state)
+            done = bool(terminated or truncated)
+            # Agent.update expects (state, action, reward, next_state, done)
+            agent.update(state, action, reward, next_state, done)
 
             total_reward += float(reward)
             state = next_state
 
-            if terminated or truncated:
+            if done:
                 break
 
         # Epsilon decay per episode
         agent.epsilon = max(EPSILON_MIN, agent.epsilon * EPSILON_DECAY)
         episode_rewards.append(total_reward)
-        print(f"Episode {episode+1}/{NUM_EPISODES} - Total Reward: {total_reward:.3f} - Epsilon: {agent.epsilon:.3f}")
+
+        # Print progress every 100 episodes (and final episode)
+        if (episode + 1) % 100 == 0 or (episode + 1) == NUM_EPISODES:
+            print(f"Episode {episode+1}/{NUM_EPISODES}: Total Reward {total_reward:.3f}")
 
     # Save Q-table
     os.makedirs(MODELS_DIR, exist_ok=True)
