@@ -1,6 +1,7 @@
 import numpy as np
 from src.env import TrafficEnv
 from src.baseline import FixedTimeAgent
+from src.trainedagent import TrainedAgent
 
 def run_evaluation(agent, env, num_episodes=5):
     """
@@ -45,7 +46,9 @@ if __name__ == "__main__":
     env = TrafficEnv()
 
     # 2. Setup Baseline Agent (Switch every 30 steps)
-    agent = FixedTimeAgent(cycle_duration=30)
+    agentfixed = FixedTimeAgent(cycle_duration=30)
+    agenttrained = TrainedAgent(q_table_path="models/q_table.npy")
 
     # 3. Run Benchmark
-    run_evaluation(agent, env)
+    run_evaluation(agentfixed, env)
+    run_evaluation(agenttrained, env)
