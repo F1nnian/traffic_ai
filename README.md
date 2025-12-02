@@ -23,3 +23,9 @@ pip install -r requirements.txt
 ```
 
 ## Usage
+
+To run the visualization run:
+
+"python -m src.demo_visual" for the QAgent
+or
+"python -m src.demo_visual --agent fixed" for the fixedtime agent
