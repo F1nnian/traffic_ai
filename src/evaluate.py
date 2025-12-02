@@ -1,7 +1,9 @@
 import numpy as np
 from src.env import TrafficEnv
 from src.baseline import FixedTimeAgent
-from src.trainedagent import TrainedAgent
+from src.agent import QLearningAgent
+from src.config import MODELS_DIR
+import os
 
 def run_evaluation(agent, env, num_episodes=5):
     """
@@ -47,7 +49,10 @@ if __name__ == "__main__":
 
     # 2. Setup Baseline Agent (Switch every 30 steps)
     agentfixed = FixedTimeAgent(cycle_duration=30)
-    agenttrained = TrainedAgent(q_table_path="models/q_table.npy")
+    state_dim = tuple(env.observation_space.nvec.tolist())
+    action_dim = int(env.action_space.n)
+    agenttrained = QLearningAgent(state_dim, action_dim, epsilon=0.0)
+    agenttrained.load(os.path.join(MODELS_DIR, "q_table.npy"))
 
     # 3. Run Benchmark
     run_evaluation(agentfixed, env)
