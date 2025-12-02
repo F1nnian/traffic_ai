@@ -30,6 +30,14 @@ class TrafficEnv(gym.Env):
 
         self.lanes = {"NS": [], "EW": []}
 
+        # Lazy-render state (matplotlib handles created on first render call)
+        self._fig = None
+        self._ax = None
+        self._light_ns = None
+        self._light_ew = None
+        self._ns_scatter = None
+        self._ew_scatter = None
+
     def reset(self, seed=None, options=None):
 
         super().reset(seed=seed)
@@ -89,10 +97,105 @@ class TrafficEnv(gym.Env):
 
         return observation, reward, terminated, truncated, info
 
-    def render(self): # needs to be updated later for visualization (return cars and positions and stuff)
-        status = "yellow" if self.is_yellow else "green"
-        print(f"Phase: {self.current_phase} ({status}) | Time: {self.time_in_phase}s")
-        print(f"Cars NS: {len(self.lanes['NS'])} | Cars EW: {len(self.lanes['EW'])}")
+    def render(self, mode: str = "human"):
+        """Visualize the intersection using matplotlib.
+
+        - human: shows/updates a window; returns None
+        - rgb_array: returns an RGB numpy array of the current frame
+        """
+        try:
+            import matplotlib.pyplot as plt
+            from matplotlib.patches import Rectangle, Circle
+        except Exception as e:
+            # Fallback to text output if matplotlib isn't available
+            status = "yellow" if self.is_yellow else "green"
+            print(f"Phase: {self.current_phase} ({status}) | Time: {self.time_in_phase}s")
+            print(f"Cars NS: {len(self.lanes['NS'])} | Cars EW: {len(self.lanes['EW'])}")
+            return None
+
+        # Initialize figure and artists lazily
+        if self._fig is None or self._ax is None:
+            self._fig, self._ax = plt.subplots(figsize=(6, 6))
+            self._ax.set_xlim(-ROAD_LENGTH, ROAD_LENGTH)
+            self._ax.set_ylim(-ROAD_LENGTH, ROAD_LENGTH)
+            self._ax.set_aspect('equal')
+            self._ax.axis('off')
+
+            # Roads
+            road_w = 8
+            horiz = Rectangle((-ROAD_LENGTH, -road_w/2), 2*ROAD_LENGTH, road_w, color='lightgray', zorder=0)
+            vert = Rectangle((-road_w/2, -ROAD_LENGTH), road_w, 2*ROAD_LENGTH, color='lightgray', zorder=0)
+            self._ax.add_patch(horiz)
+            self._ax.add_patch(vert)
+
+            # Lights
+            self._light_ns = Circle((0, 14), 3, color='green')
+            self._light_ew = Circle((14, 0), 3, color='red')
+            self._ax.add_patch(self._light_ns)
+            self._ax.add_patch(self._light_ew)
+
+            # Car markers
+            self._ns_scatter = self._ax.scatter([], [], s=40, c='blue')
+            self._ew_scatter = self._ax.scatter([], [], s=40, c='orange')
+
+        # Update lights
+        if self.is_yellow:
+            self._light_ns.set_color('yellow')
+            self._light_ew.set_color('yellow')
+        else:
+            if self.current_phase == 0:
+                self._light_ns.set_color('green')
+                self._light_ew.set_color('red')
+            else:
+                self._light_ns.set_color('red')
+                self._light_ew.set_color('green')
+
+        # Update car positions on plot
+        ns_xy = [(0.0, c["position"]) for c in self.lanes["NS"]]
+        ew_xy = [(c["position"], 0.0) for c in self.lanes["EW"]]
+
+        import numpy as _np
+        if ns_xy:
+            self._ns_scatter.set_offsets(_np.array(ns_xy, dtype=float))
+        else:
+            self._ns_scatter.set_offsets(_np.empty((0, 2)))
+        if ew_xy:
+            self._ew_scatter.set_offsets(_np.array(ew_xy, dtype=float))
+        else:
+            self._ew_scatter.set_offsets(_np.empty((0, 2)))
+
+        # Draw/update
+        self._fig.canvas.draw()
+
+        if mode == "rgb_array":
+            # Return RGB array
+            w, h = self._fig.canvas.get_width_height()
+            buf = np.frombuffer(self._fig.canvas.tostring_rgb(), dtype=np.uint8)
+            return buf.reshape(h, w, 3)
+        else:
+            # Show interactively
+            try:
+                import matplotlib.pyplot as plt  # ensure pause is available
+                plt.pause(0.001)
+            except Exception:
+                pass
+            return None
+
+    def close(self):
+        """Close any open renderers."""
+        try:
+            import matplotlib.pyplot as plt
+            if self._fig is not None:
+                plt.close(self._fig)
+        except Exception:
+            pass
+        finally:
+            self._fig = None
+            self._ax = None
+            self._light_ns = None
+            self._light_ew = None
+            self._ns_scatter = None
+            self._ew_scatter = None
 
     def _get_obs(self, sq_wait_ns, sq_wait_ew):
         # Current Phase
