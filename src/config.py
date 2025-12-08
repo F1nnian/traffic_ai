@@ -16,7 +16,8 @@ YELLOW_PHASE_DURATION = 4
 
 # Traffic Generation (Poisson Distribution)
 # Probability of a new car appearing per second
-TRAFFIC_INTENSITY = 0.3
+TRAFFIC_INTENSITY_NS = 0.5  # North-South is busy
+TRAFFIC_INTENSITY_EW = 0.1  # East-West is quiet
 
 # Car Physics
 MAX_SPEED = 14  # m/s (approx 50 km/h)

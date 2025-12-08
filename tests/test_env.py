@@ -2,6 +2,7 @@ from src.env import TrafficEnv
 
 import matplotlib.pyplot as plt
 from src.config import DELTA_T, ROAD_LENGTH, MAX_SPEED
+import src.config as config_module
 
 def test_acceleration():
     # 1. Setup Environment
@@ -76,8 +77,44 @@ def test_physics():
             print(f"Step {i:02d} | Action: {action} | Obs: {obs} | Reward: {reward:.2f} | Queues: NS={info['ns_queue']} EW={info['ew_queue']}")
 
 
+def test_asymmetry():    
+    print(f"Simulation Setup: NS_Intensity={config_module.TRAFFIC_INTENSITY_NS} vs EW_Intensity={config_module.TRAFFIC_INTENSITY_EW}")
 
+    env = TrafficEnv()
+    env.reset()
+
+    # 3. Simulation laufen lassen
+    # Wir brauchen ca. 200-500 Steps, damit der Zufall sich ausgleicht
+    steps = 300
+    print(f"Simulating {steps} steps (approx {steps * config_module.STEPS_PER_ACTION * config_module.DELTA_T:.0f} seconds)...")
+
+    ns_count = len(env.lanes["NS"])
+    ew_count = len(env.lanes["EW"])
+
+    for _ in range(steps):
+        # Action 0 = Phase beibehalten. 
+        # Wir lassen einfach alles auflaufen, um die Spawn-Raten zu sehen.
+        env.step(1) 
+        ns_count += len(env.lanes["NS"])
+        ew_count += len(env.lanes["EW"])
+
+
+
+    print("-" * 30)
+    print(f"Final Lane Counts:")
+    print(f"🚗 NS Lane: {ns_count} cars")
+    print(f"🚗 EW Lane: {ew_count} cars")
+    print("-" * 30)
+
+    # 5. Check
+    if ns_count > (ew_count * 4):
+        print("✅ SUCCESS: NS traffic is dominantly higher. Asymmetry logic works.")
+    elif ns_count > ew_count:
+        print("⚠️ WARNING: NS is higher, but not by a massive margin. Check randomness.")
+    else:
+        print("❌ FAILURE: NS traffic is not higher than EW. Check your _spawn_cars logic.")
 
 if __name__ == "__main__":
-    test_physics()
-    test_acceleration()
+    # test_physics()
+    # test_acceleration()
+    test_asymmetry()

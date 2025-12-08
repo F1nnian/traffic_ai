@@ -7,7 +7,8 @@ from src.config import (
     MIN_PHASE_DURATION,
     YELLOW_PHASE_DURATION,
     SQ_WAIT_BUCKETS,
-    TRAFFIC_INTENSITY,
+    TRAFFIC_INTENSITY_EW,
+    TRAFFIC_INTENSITY_NS,
     ROAD_LENGTH,
     MAX_SPEED,
     ENABLE_PHYSICS,
@@ -112,7 +113,7 @@ class TrafficEnv(gym.Env):
 
     def _spawn_cars(self):
         # Try to spawn for North-South
-        if self.np_random.random() < (TRAFFIC_INTENSITY * DELTA_T):
+        if self.np_random.random() < (TRAFFIC_INTENSITY_NS * DELTA_T):
             self.lanes["NS"].append({
                 "position": float(ROAD_LENGTH),
                 "wait_time": 0.0,
@@ -120,7 +121,7 @@ class TrafficEnv(gym.Env):
             })
 
         # Try to spawn for East-West
-        if random.random() < (TRAFFIC_INTENSITY * DELTA_T):
+        if random.random() < (TRAFFIC_INTENSITY_EW * DELTA_T):
             self.lanes["EW"].append({
                 "position": float(ROAD_LENGTH),
                 "wait_time": 0.0,
