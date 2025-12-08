@@ -2,7 +2,9 @@ import os
 
 # 1. Simulation Settings
 # Seconds per simulation step
-DELTA_T = 1
+DELTA_T = 0.1 # needs to be small in order for physics to work
+STEPS_PER_ACTION = 10 # AI acts every 10 steps (every second)
+
 
 # Length of the road in meters (per arm of the intersection)
 ROAD_LENGTH = 100
@@ -18,8 +20,10 @@ TRAFFIC_INTENSITY = 0.3
 
 # Car Physics
 MAX_SPEED = 14  # m/s (approx 50 km/h)
-ACCELERATION = 2  # m/s^2
-
+ENABLE_PHYSICS = True
+ACCELERATION = 2.0          # m/s^2 (Standard car acceleration)
+BRAKING_DECELERATION = 4.5  # m/s^2 (Standard braking)
+SAFE_DISTANCE = 2.0         # Meters buffer between cars
 
 # 2. Reinforcement Learning Settings
 # Q-Learning Parameters

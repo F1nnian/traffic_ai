@@ -9,7 +9,12 @@ from src.config import (
     SQ_WAIT_BUCKETS,
     TRAFFIC_INTENSITY,
     ROAD_LENGTH,
-    MAX_SPEED
+    MAX_SPEED,
+    ENABLE_PHYSICS,
+    ACCELERATION,
+    BRAKING_DECELERATION,
+    SAFE_DISTANCE,
+    STEPS_PER_ACTION
 )
 
 
@@ -46,29 +51,30 @@ class TrafficEnv(gym.Env):
         return observation, info
 
     def step(self, action):
-
-        # Handle Phase Switching
-        if self.is_yellow:  # If in yellow phase
-            self.time_in_phase += DELTA_T
-            if self.time_in_phase >= YELLOW_PHASE_DURATION:
-                self.current_phase = 1 - self.current_phase  # Toggle 0 <-> 1
-                self.is_yellow = False
-                self.time_in_phase = 0
-        else:
-            # Normal Green Phase
-            if action == 1:  # Agent wants to switch
-                if self.time_in_phase >= MIN_PHASE_DURATION:
-                    self.is_yellow = True
+        # let physics run for 10 steps until next action
+        for _ in range(STEPS_PER_ACTION):
+            # Handle Phase Switching
+            if self.is_yellow:  # If in yellow phase
+                self.time_in_phase += DELTA_T
+                if self.time_in_phase >= YELLOW_PHASE_DURATION:
+                    self.current_phase = 1 - self.current_phase  # Toggle 0 <-> 1
+                    self.is_yellow = False
                     self.time_in_phase = 0
-                else:
-                    # Cannot switch yet
-                    self.time_in_phase += DELTA_T
             else:
-                self.time_in_phase += DELTA_T  # Agent wants to stay
+                # Normal Green Phase
+                if action == 1:  # Agent wants to switch
+                    if self.time_in_phase >= MIN_PHASE_DURATION:
+                        self.is_yellow = True
+                        self.time_in_phase = 0
+                    else:
+                        # Cannot switch yet
+                        self.time_in_phase += DELTA_T
+                else:
+                    self.time_in_phase += DELTA_T  # Agent wants to stay
 
-        # Move and spawn cars
-        self._spawn_cars()
-        self._move_cars()
+            # Move and spawn cars
+            self._spawn_cars()
+            self._move_cars()
 
         # Calculate Reward
         ns_wait = sum([c["wait_time"]**2 for c in self.lanes["NS"]])
@@ -122,52 +128,93 @@ class TrafficEnv(gym.Env):
             })
 
     def _move_cars(self):
-        # Minimum distance to keep between cars (meters)
-        SAFE_DISTANCE = 2.0 
-
         # Loop through both directions
         for lane_name in ["NS", "EW"]:
             lane = self.lanes[lane_name]
             
-            # Check if lane has green light
+            # Determine traffic light status for this lane
             if self.is_yellow:
                 is_green = False
             else:
-                if lane_name == "NS":
-                    is_green = (self.current_phase == 0)
-                else: # EW
-                    is_green = (self.current_phase == 1)
+                is_green = (self.current_phase == 0) if lane_name == "NS" else (self.current_phase == 1)
 
-            # Sort cars by position (Closest to intersection first)
+            # Sort (Cars with higher position values are further back)
+            # process from closest to intersection (lowest pos) to furthest
             lane.sort(key=lambda c: c["position"])
 
-            # Define the first obstacle
-            next_obstacle_pos = 0.0 if not is_green else -9999.0
+            # Track position of the obstacle immediately ahead
+            # Initialize effectively infinite (negative because cars move towards 0)
+            # We use a large negative number effectively meaning "clear road ahead" for the first car
+            pos_obstacle_ahead = -9999.0 
 
             cars_to_keep = []
 
             for car in lane:
-                dist_to_move = MAX_SPEED * DELTA_T
+                current_pos = car["position"]
+                current_speed = car["speed"]
+                
+                # identify obstacle car
+                dist_to_car_ahead = current_pos - pos_obstacle_ahead - SAFE_DISTANCE
+                
+                # identify obstacle stop line
+                dist_to_stop_line = current_pos - 0.0
 
-                # Distance to the thing ahead (car or stop line)
-                space_ahead = car["position"] - next_obstacle_pos - SAFE_DISTANCE
+                # determine which obstacle is relevant
+                dist_to_target = dist_to_car_ahead
+                target_type = "car"
 
-                if space_ahead <= 0:
-                    move_dist = 0
-                    car["wait_time"] += DELTA_T
-                else:
-                    move_dist = min(dist_to_move, space_ahead)
+                # if light is not green, the stop line is a potential obstacle
+                if not is_green:
+                    if dist_to_stop_line > 0:
+                        # if the line is closer than the car ahead, the line is the priority
+                        if dist_to_stop_line < dist_to_car_ahead:
+                            dist_to_target = dist_to_stop_line
+                            target_type = "light"
+
+                # physics calculation
+                if ENABLE_PHYSICS:
+                    # calculate required braking distance: d = v^2 / (2a)
+                    if current_speed > 0:
+                        braking_dist_needed = (current_speed**2) / (2 * BRAKING_DECELERATION)
+                    else:
+                        braking_dist_needed = 0
+
+                    # dilemma zone (cant stop in time)
+                    if target_type == "light" and dist_to_target < braking_dist_needed:
+                        dist_to_target = dist_to_car_ahead 
                     
-                    # if move_dist < 0.1:
-                    #      car["wait_time"] += DELTA_T
+                    if dist_to_target > (braking_dist_needed + SAFE_DISTANCE):
+                        # accelerate
+                        new_speed = current_speed + (ACCELERATION * DELTA_T)
+                        new_speed = min(new_speed, MAX_SPEED)
+                    else:
+                        # brake
+                        new_speed = current_speed - (BRAKING_DECELERATION * DELTA_T)
+                        new_speed = max(0.0, new_speed)
+
+                    car["speed"] = new_speed
+                    move_dist = new_speed * DELTA_T
+
+                else:
+                    # Fallback to old instant movement logic
+                    dist_to_move = MAX_SPEED * DELTA_T
+                    if dist_to_target <= 0:
+                        move_dist = 0
+                    else:
+                        move_dist = min(dist_to_move, dist_to_target)
+                    car["speed"] = MAX_SPEED if move_dist > 0 else 0
+
+                # update position
+                if move_dist < 0.05 and dist_to_target < 2.0:
+                    car["wait_time"] += DELTA_T
 
                 car["position"] -= move_dist
 
-                next_obstacle_pos = car["position"]
+                # Update the obstacle ahead for the next car in the loop
+                pos_obstacle_ahead = car["position"]
 
-                # Remove cars that have left the intersection
-                if car["position"] > -5:
+                # Remove cars that have cleared the intersection
+                if car["position"] > -10:
                     cars_to_keep.append(car)
 
-            # Update the main list with cars that are still here
             self.lanes[lane_name] = cars_to_keep
