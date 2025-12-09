@@ -1,7 +1,7 @@
 from src.env import TrafficEnv
 
 import matplotlib.pyplot as plt
-from src.config import DELTA_T, ROAD_LENGTH, MAX_SPEED
+from src.config import DELTA_T, ROAD_LENGTH, MAX_SPEED, STEPS_PER_ACTION
 import src.config as config_module
 
 def test_acceleration():
@@ -36,7 +36,7 @@ def test_acceleration():
             car = env.lanes["NS"][0]
             history_speed.append(car["speed"])
             history_pos.append(car["position"])
-            time_steps.append(i * DELTA_T)
+            time_steps.append(i * DELTA_T * STEPS_PER_ACTION)
         else:
             break
 
@@ -116,5 +116,5 @@ def test_asymmetry():
 
 if __name__ == "__main__":
     # test_physics()
-    # test_acceleration()
-    test_asymmetry()
+    test_acceleration()
+    # test_asymmetry()
