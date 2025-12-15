@@ -155,8 +155,58 @@ def test_asymmetry():
     else:
          print("❌ CONFIG CHECK: Asymmetry not configured correctly.")
 
+def test_bidirectional_traffic():
+    """
+    Verifies that the TrafficEnv correctly handles bidirectional configuration
+    without crashing and that cars spawn in all 4 lanes.
+    """
+    print("\n>>> STARTING BIDIRECTIONAL TEST...")
+
+    # 1. Inject Test Configuration
+    test_config_name = "TEST_BI_DIRECTIONAL"
+    SCENARIOS[test_config_name] = {
+        "lanes": ["N2S", "S2N", "E2W", "W2E"],
+        "green_phases": [["N2S", "S2N"], ["E2W", "W2E"]],
+        "traffic_intensity": {"N2S": 0.8, "S2N": 0.8, "E2W": 0.8, "W2E": 0.8}, # High intensity to ensure spawning
+        "sq_wait_buckets": [10, 20, 30, 40], # Dummy buckets
+        "enable_physics": False # Disable physics for faster testing
+    }
+
+    # 2. Initialize Environment
+    try:
+        env = TrafficEnv(config_name=test_config_name)
+        obs, _ = env.reset()
+    except Exception as e:
+        print(f"❌ FAILED to initialize environment: {e}")
+        return
+
+    # 3. Run Simulation Loop
+    cars_spawned = {lane: 0 for lane in env.lane_ids}
+    
+    for step in range(20):
+        # Action 0: Keep phase (Phase 0: N2S/S2N Green)
+        obs, reward, terminated, truncated, info = env.step(action=0)
+        
+        # Track max cars seen in each lane to verify spawning
+        for lane in env.lane_ids:
+            current_count = len(env.lanes[lane])
+            if current_count > cars_spawned[lane]:
+                cars_spawned[lane] = current_count
+
+    # 4. Verify Results
+    print(f"Max cars seen: {cars_spawned}")
+    
+    missing_lanes = [lane for lane, count in cars_spawned.items() if count == 0]
+    
+    if not missing_lanes:
+        print("✅ SUCCESS: Traffic detected in all bidirectional lanes (N2S, S2N, E2W, W2E).")
+    else:
+        print(f"⚠️ FAILURE: No cars spawned in lanes: {missing_lanes}")
+        print("Check your 'traffic_intensity' or '_spawn_cars' logic.")
+
 if __name__ == "__main__":
     # You can comment these out to run specific tests
-    test_physics()
-    test_asymmetry()
-    test_acceleration()
+    # test_physics()
+    # test_asymmetry()
+    # test_acceleration()
+    test_bidirectional_traffic()
