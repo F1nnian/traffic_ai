@@ -104,11 +104,14 @@ class TrafficEnv(gym.Env):
 
         return observation, reward, False, False, info
 
-    def render(self): # needs to be updated later for visualization (return cars and positions and stuff)
+    def render(self):
         status = "yellow" if self.is_yellow else "green"
-        print(f"Phase: {self.current_phase} ({status}) | Time: {self.time_in_phase}s")
-        print(f"Cars NS: {len(self.lanes['NS'])} | Cars EW: {len(self.lanes['EW'])}")
-
+        print(f"Phase: {self.current_phase} ({status}) | Time: {self.time_in_phase:.1f}s")
+        
+        # Dynamic print that handles ANY lane names
+        stats = " | ".join([f"{k}: {len(v)}" for k, v in self.lanes.items()])
+        print(stats)
+        
     def _get_obs(self, lane_waits):
     # If called from reset(), create dummy zeros
         if lane_waits is None:
