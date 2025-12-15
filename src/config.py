@@ -21,10 +21,46 @@ TRAFFIC_INTENSITY_EW = 0.1  # East-West is quiet
 
 # Car Physics
 MAX_SPEED = 14  # m/s (approx 50 km/h)
-ENABLE_PHYSICS = True
 ACCELERATION = 2.0          # m/s^2 (Standard car acceleration)
 BRAKING_DECELERATION = 4.5  # m/s^2 (Standard braking)
 SAFE_DISTANCE = 2.0         # Meters buffer between cars
+
+SCENARIOS = {
+    "SIMPLE": {
+        "description": "Original setup: 2 Lanes, Simple Physics, Asymmetric Traffic",
+        "lanes": ["NS", "EW"],
+        "green_phases": {
+            0: ["NS"],  # Phase 0: NS Green
+            1: ["EW"]   # Phase 1: EW Green
+        },
+        "enable_physics": True,
+        "traffic_intensity": {
+            "NS": 0.5, # Rush hour
+            "EW": 0.1  # Quiet
+        },
+        # RL Buckets
+        "sq_wait_buckets": [1, 900, 3600]
+    },
+    
+    # Placeholder for future issues
+    "BIDIRECTIONAL": {
+        "description": "4 Lanes (N2S, S2N, ...), Symmetric Traffic",
+        "lanes": ["N2S", "S2N", "E2W", "W2E"],
+        "green_phases": {
+            0: ["N2S", "S2N"], # Phase 0: North/South move
+            1: ["E2W", "W2E"]  # Phase 1: East/West move
+        },
+        "enable_physics": True,
+        "traffic_intensity": {
+            "N2S": 0.3, "S2N": 0.3,
+            "E2W": 0.3, "W2E": 0.3
+        },
+        "sq_wait_buckets": [1, 1500, 5000] # Higher buckets for more cars
+    }
+}
+
+# Default Configuration
+DEFAULT_CONFIG = SCENARIOS["SIMPLE"]
 
 # 2. Reinforcement Learning Settings
 # Q-Learning Parameters
