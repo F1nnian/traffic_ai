@@ -6,16 +6,14 @@ from src.config import (
     DELTA_T,
     MIN_PHASE_DURATION,
     YELLOW_PHASE_DURATION,
-    SQ_WAIT_BUCKETS,
-    TRAFFIC_INTENSITY_EW,
-    TRAFFIC_INTENSITY_NS,
     ROAD_LENGTH,
     MAX_SPEED,
-    ENABLE_PHYSICS,
     ACCELERATION,
     BRAKING_DECELERATION,
     SAFE_DISTANCE,
-    STEPS_PER_ACTION
+    STEPS_PER_ACTION,
+    SCENARIOS,
+    DEFAULT_CONFIG
 )
 
 
@@ -23,18 +21,31 @@ class TrafficEnv(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self):
+    def __init__(self, config_name="SIMPLE"):
         super(TrafficEnv, self).__init__()
+
+        if config_name in SCENARIOS:
+            self.config = SCENARIOS[config_name]
+        else:
+            print(f"Warning: Scenario '{config_name}' not found. Using DEFAULT.")
+            self.config = DEFAULT_CONFIG
+
+        # 2. Extract Config Values (for easier access)
+        self.lane_ids = self.config["lanes"] # ["NS", "EW"] or ["N2S", "S2N", ...]
+        self.green_phases = self.config["green_phases"]
+        self.intensities = self.config["traffic_intensity"]
+        self.buckets = self.config["sq_wait_buckets"]
+        self.enable_physics = self.config["enable_physics"]
 
         self.action_space = spaces.Discrete(2)
 
-        self.observation_space = spaces.MultiDiscrete([2, 4, 4])
+        self.observation_space = spaces.MultiDiscrete([2] + [4] * len(self.lane_ids))
 
         self.current_phase = 0  # 0: NS Green, 1: EW Green
         self.time_in_phase = 0  # Track seconds to enforce min duration/yellow
         self.is_yellow = False
 
-        self.lanes = {"NS": [], "EW": []}
+        self.lanes = {name: [] for name in self.lane_ids}
 
     def reset(self, seed=None, options=None):
 
@@ -44,9 +55,9 @@ class TrafficEnv(gym.Env):
         self.current_phase = 0
         self.time_in_phase = 0
         self.is_yellow = False
-        self.lanes = {"NS": [], "EW": []}
+        self.lanes = {name: [] for name in self.lane_ids}
 
-        observation = self._get_obs(0, 0)
+        observation = self._get_obs(lane_waits=None)
         info = {}
 
         return observation, info
@@ -78,66 +89,68 @@ class TrafficEnv(gym.Env):
             self._move_cars()
 
         # Calculate Reward
-        ns_wait = sum([c["wait_time"]**2 for c in self.lanes["NS"]])
-        ew_wait = sum([c["wait_time"]**2 for c in self.lanes["EW"]])
+        total_sq_wait = 0
+        lane_waits = []
         
-        reward = -(ns_wait + ew_wait)
+        for lane_name in self.lane_ids:
+            w = sum([c["wait_time"]**2 for c in self.lanes[lane_name]])
+            total_sq_wait += w
+            lane_waits.append(w) # Collect for observation
+            
+        reward = -total_sq_wait
+        observation = self._get_obs(lane_waits)
+        
+        info = {f"queue_{k}": len(v) for k,v in self.lanes.items()}
 
-        # Get Observation
-        observation = self._get_obs(ns_wait, ew_wait)
-
-        # Episode termination condition (Placeholder)
-        terminated = False
-        truncated = False
-        info = {
-            "ns_queue": len(self.lanes["NS"]),
-            "ew_queue": len(self.lanes["EW"])
-        }
-
-        return observation, reward, terminated, truncated, info
+        return observation, reward, False, False, info
 
     def render(self): # needs to be updated later for visualization (return cars and positions and stuff)
         status = "yellow" if self.is_yellow else "green"
         print(f"Phase: {self.current_phase} ({status}) | Time: {self.time_in_phase}s")
         print(f"Cars NS: {len(self.lanes['NS'])} | Cars EW: {len(self.lanes['EW'])}")
 
-    def _get_obs(self, sq_wait_ns, sq_wait_ew):
-        # Current Phase
-        p = self.current_phase
-
-        # Discretize using buckets
-        bucket_ns = np.digitize(sq_wait_ns, SQ_WAIT_BUCKETS)
-        bucket_ew = np.digitize(sq_wait_ew, SQ_WAIT_BUCKETS)
-
-        return np.array([p, bucket_ns, bucket_ew], dtype=np.int32)
+    def _get_obs(self, lane_waits):
+    # If called from reset(), create dummy zeros
+        if lane_waits is None:
+            lane_waits = [0] * len(self.lane_ids)
+            
+        # 1. Phase
+        obs = [self.current_phase]
+        
+        # 2. Buckets for each lane
+        for w in lane_waits:
+            bucket = np.digitize(w, self.buckets)
+            obs.append(bucket)
+            
+        return np.array(obs, dtype=np.int32)
 
     def _spawn_cars(self):
-        # Try to spawn for North-South
-        if self.np_random.random() < (TRAFFIC_INTENSITY_NS * DELTA_T):
-            self.lanes["NS"].append({
-                "position": float(ROAD_LENGTH),
-                "wait_time": 0.0,
-                "speed": MAX_SPEED
-            })
-
-        # Try to spawn for East-West
-        if random.random() < (TRAFFIC_INTENSITY_EW * DELTA_T):
-            self.lanes["EW"].append({
-                "position": float(ROAD_LENGTH),
-                "wait_time": 0.0,
-                "speed": MAX_SPEED
-            })
+        # Loop through dynamic lanes list
+        for lane_name in self.lane_ids:
+            # Get intensity for this specific lane
+            intensity = self.intensities[lane_name]
+            
+            if self.np_random.random() < (intensity * DELTA_T):
+                self.lanes[lane_name].append({
+                    "position": float(ROAD_LENGTH),
+                    "wait_time": 0.0,
+                    "speed": MAX_SPEED if not self.enable_physics else MAX_SPEED 
+                })
 
     def _move_cars(self):
-        # Loop through both directions
-        for lane_name in ["NS", "EW"]:
+# Check which lanes are allowed to move in current phase
+        # Example: Phase 0 -> allowed=["NS"] (Simple) or ["N2S", "S2N"] (Bidirectional)
+        allowed_lanes = self.green_phases[self.current_phase]
+        
+        # Loop through ALL lanes dynamically
+        for lane_name in self.lane_ids:
             lane = self.lanes[lane_name]
             
-            # Determine traffic light status for this lane
+            # Is this lane Green?
             if self.is_yellow:
                 is_green = False
             else:
-                is_green = (self.current_phase == 0) if lane_name == "NS" else (self.current_phase == 1)
+                is_green = (lane_name in allowed_lanes)
 
             # Sort (Cars with higher position values are further back)
             # process from closest to intersection (lowest pos) to furthest
@@ -173,7 +186,7 @@ class TrafficEnv(gym.Env):
                             target_type = "light"
 
                 # physics calculation
-                if ENABLE_PHYSICS:
+                if self.enable_physics:
                     # calculate required braking distance: d = v^2 / (2a)
                     if current_speed > 0:
                         braking_dist_needed = (current_speed**2) / (2 * BRAKING_DECELERATION)
