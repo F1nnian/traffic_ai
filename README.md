@@ -1,5 +1,9 @@
 # traffic_ai
 
+# Link to report
+
+(Click here)[https://www.overleaf.com/2911425123qjrsbtbfxwgg#ba624a]
+
 ## Project Overview
 This project simulates an intersection.  
 The goal is to develop an AI agent that controls the traffic lights efficiently, minimizing vehicle waiting times and optimizing traffic flow using reinforcement learning.
