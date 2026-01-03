@@ -2,7 +2,7 @@
 
 # Link to report
 
-(Click here)[https://www.overleaf.com/2911425123qjrsbtbfxwgg#ba624a]
+[Click here](https://www.overleaf.com/2911425123qjrsbtbfxwgg#ba624a)
 
 ## Project Overview
 This project simulates an intersection.  
