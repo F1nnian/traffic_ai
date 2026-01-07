@@ -2,6 +2,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import random
+import math
 from src.config import (
     DELTA_T,
     MIN_PHASE_DURATION,
@@ -14,7 +15,8 @@ from src.config import (
     STEPS_PER_ACTION,
     SCENARIOS,
     DEFAULT_CONFIG,
-    MIN_SAFE_TIME_GAP
+    MIN_SAFE_TIME_GAP,
+    MAX_TURN_SPEED,
 )
 
 
@@ -32,24 +34,26 @@ class TrafficEnv(gym.Env):
             self.config = DEFAULT_CONFIG
 
         # 2. Extract Config Values (for easier access)
-        self.lane_ids = self.config["lanes"] # ["NS", "EW"] or ["N2S", "S2N", ...]
+        self.lanes = self.config["lanes"]
+        self.lane_ids = []
+        for lanes in self.lanes.values():
+            self.lane_ids.extend(lanes)
+        self.routes = self.config["routes"]
         self.green_phases = self.config["green_phases"]
-        self.intensities = self.config["traffic_intensity"]
+        self.yield_map = self.config.get("yield_map", {})
+        self.protected_phases = self.config.get("protected_phases", [])
         self.buckets = self.config["sq_wait_buckets"]
         self.enable_physics = self.config["enable_physics"]
-        self.turning_ratios = self.config.get("turning_ratios", {})
-
-        self.opposing_lane_map = self.config.get("opposing_lanes", {})
 
         self.action_space = spaces.Discrete(2)
 
-        self.observation_space = spaces.MultiDiscrete([2] + [4] * len(self.lane_ids))
+        self.observation_space = spaces.MultiDiscrete(
+            [len(self.green_phases)] + [len(self.buckets) + 1] * len(self.lane_ids)
+        )
 
         self.current_phase = 0  # 0: NS Green, 1: EW Green
         self.time_in_phase = 0  # Track seconds to enforce min duration/yellow
         self.is_yellow = False
-
-        self.lanes = {name: [] for name in self.lane_ids}
 
     def reset(self, seed=None, options=None):
 
@@ -68,11 +72,13 @@ class TrafficEnv(gym.Env):
 
     def step(self, action):
 
+        num_phases = len(self.green_phases)
+
         # Handle Phase Switching
         if self.is_yellow:  # If in yellow phase
             self.time_in_phase += DELTA_T
             if self.time_in_phase >= YELLOW_PHASE_DURATION:
-                self.current_phase = 1 - self.current_phase  # Toggle 0 <-> 1
+                self.current_phase = (self.current_phase + 1) % num_phases
                 self.is_yellow = False
                 self.time_in_phase = 0
         else:
@@ -88,134 +94,163 @@ class TrafficEnv(gym.Env):
                 self.time_in_phase += DELTA_T  # Agent wants to stay
 
             # Move and spawn cars
-            self._spawn_cars()
-            self._move_cars()
+        self._spawn_cars()
+        self._move_cars()
 
         # Calculate Reward
         total_sq_wait = 0
         lane_waits = []
-        
+
         for lane_name in self.lane_ids:
-            w = sum([c["wait_time"]**2 for c in self.lanes[lane_name]])
+            w = sum([c["wait_time"] ** 2 for c in self.lanes[lane_name]])
             total_sq_wait += w
-            lane_waits.append(w) # Collect for observation
-            
+            lane_waits.append(w)  # Collect for observation
+
         reward = -total_sq_wait
         observation = self._get_obs(lane_waits)
-        
-        info = {f"queue_{k}": len(v) for k,v in self.lanes.items()}
+
+        info = {f"queue_{k}": len(v) for k, v in self.lanes.items()}
 
         return observation, reward, False, False, info
 
     def render(self):
         status = "yellow" if self.is_yellow else "green"
-        print(f"Phase: {self.current_phase} ({status}) | Time: {self.time_in_phase:.1f}s")
-        
+        print(
+            f"Phase: {self.current_phase} ({status}) | Time: {self.time_in_phase:.1f}s"
+        )
+
         # Dynamic print that handles ANY lane names
         stats = " | ".join([f"{k}: {len(v)}" for k, v in self.lanes.items()])
         print(stats)
-        
+
     def _get_obs(self, lane_waits):
-    # If called from reset(), create dummy zeros
+        # If called from reset(), create dummy zeros
         if lane_waits is None:
             lane_waits = [0] * len(self.lane_ids)
-            
+
         # 1. Phase
         obs = [self.current_phase]
-        
+
         # 2. Buckets for each lane
         for w in lane_waits:
             bucket = np.digitize(w, self.buckets)
             obs.append(bucket)
-            
+
         return np.array(obs, dtype=np.int32)
 
     def _spawn_cars(self):
-        # Loop through dynamic lanes list
-        for lane_name in self.lane_ids:
-            # Get intensity for this specific lane
-            intensity = self.intensities[lane_name]
-            
-            if self.np_random.random() < (intensity * DELTA_T):
-
-                # default to no turning
-                ratios = self.turning_ratios.get(lane_name, {"left": 0.0, "straight": 1.0, "right": 0.0})
-                
-                turn_intent = self.np_random.choice(
-                    ["left", "straight", "right"],
-                    p=[ratios["left"], ratios["straight"], ratios["right"]]
+        for route_id, data in self.routes.items():
+            if self.np_random.random() < (data["i"] * DELTA_T):
+                self.lanes[data["lane"]].append(
+                    {
+                        "position": float(ROAD_LENGTH),
+                        "speed": MAX_SPEED,
+                        "wait_time": 0.0,
+                        # Identity
+                        "route_id": route_id,
+                        "turn_intent": data["intent"],
+                        # Physics
+                        "length": 5.0,
+                        "accel": ACCELERATION,
+                        "decel": BRAKING_DECELERATION,
+                        "max_speed": MAX_SPEED,
+                    }
                 )
 
-                self.lanes[lane_name].append({
-                    "position": float(ROAD_LENGTH),
-                    "wait_time": 0.0,
-                    "speed": MAX_SPEED,
-                    "turn_intent": turn_intent
-                })
+    def _is_gap_safe(self, car, current_lane):
+        car_route_id = car["route_id"]
+        current_speed = car["speed"]
+        # 1. Check Protected Phase (Green Arrow -> Always Safe)
+        if self.current_phase in self.protected_phases:
+            if current_lane in self.green_phases[self.current_phase]:
+                return True
 
-    def _is_gap_safe(self, lane_name):
-        opposing_id = self.opposing_lane_map.get(lane_name)
-        
-        if opposing_id is not None and opposing_id in self.lanes:
-            opposing_cars = self.lanes[opposing_id]
-            
-            # 1. Filter for cars that are relevant (not passed yet)
-            # We use > -5 to catch cars just inside the intersection too
-            approaching_cars = [c for c in opposing_cars if c["position"] > -5.0]
-            
-            # 2. If no cars, it's safe
-            if not approaching_cars:
-                return True
-                
-            # 3. Sort by position (closest to intersection first)
-            approaching_cars.sort(key=lambda c: c["position"])
-            
-            # 4. GET THE LEAD CAR
-            lead_car = approaching_cars[0]
-            
-            lead_pos = lead_car["position"]
-            lead_speed = lead_car["speed"]
-            lead_intent = lead_car.get("turn_intent", "straight")
-            
-            # --- THE LOGIC FIX ---
-            # If the LEAD car is turning left, he blocks his own lane.
-            # We can proceed safely (simultaneous left turn).
-            if lead_intent == "left":
-                return True
-            
-            # If the LEAD car is Straight/Right, we check safety physics:
-            
-            # A. Is he far away? (Time to Arrival)
-            if lead_speed > 0.1:
-                tta = lead_pos / lead_speed
-                if tta < MIN_SAFE_TIME_GAP:
-                    return False # Too fast, too close
-            
-            # B. Is he close and stopped? (e.g. waiting at line)
-            else:
-                if lead_pos < 15.0:
-                    return False # He's right there waiting to go straight
-                    
+        # 2. Check Yield Map
+        conflicting_routes = self.yield_map.get(car_route_id, [])
+        if not conflicting_routes:
+            return True
+
+        dist_to_clear = 18.0  # Distance to clear intersection
+
+        # Calculate time to clear intersection
+        v_start = min(current_speed, MAX_TURN_SPEED)
+
+        t_cross = (
+            -v_start + math.sqrt(v_start**2 + 2 * ACCELERATION * dist_to_clear)
+        ) / ACCELERATION
+
+        required_gap = t_cross + 1.5
+
+        # 3. Identify physical lanes to check (avoid duplicates)
+        lanes_to_scan = set()
+        for r_id in conflicting_routes:
+            route_data = self.routes.get(r_id)
+            if route_data:
+                lanes_to_scan.add(route_data["lane"])
+
+        # 4. Scan Lanes
+        for lane_name in lanes_to_scan:
+            all_cars = self.lanes.get(lane_name, [])
+
+            # Look only at cars near the intersection
+            approaching = [c for c in all_cars if c["position"] > -25.0]
+
+            if not approaching:
+                continue
+
+            # Extract lead vehicle
+            approaching.sort(key=lambda c: c["position"])
+            lead_vehicle = approaching[0]
+
+            threat_vehicle = None
+
+            # If the lead vehicle is turning left
+            if lead_vehicle["turn_intent"] == "left":
+                # Check the shadow vehicle behind
+                if len(approaching) > 1:
+                    shadow_vehicle = approaching[1]
+                    if shadow_vehicle["route_id"] in conflicting_routes:
+                        threat_vehicle = shadow_vehicle
+                else:
+                    continue
+
+            # If the lead vehicle is going straight or right
+            elif lead_vehicle["route_id"] in conflicting_routes:
+                threat_vehicle = lead_vehicle
+
+            if threat_vehicle:
+
+                if threat_vehicle["speed"] < 1.0 and threat_vehicle["position"] > -5.0:
+                    continue
+
+                # Calculate Time To Arrival
+                if threat_vehicle["speed"] > 0.1:
+                    t_pos = max(0.1, threat_vehicle["position"])
+                    tta = t_pos / threat_vehicle["speed"]
+
+                    if tta < required_gap:
+                        return False
+
         return True
-    
+
     def _move_cars(self):
         # check which lanes are currently allowed to move
         allowed_lanes = self.green_phases[self.current_phase]
-        
+
         # loop through all lanes
         for lane_name in self.lane_ids:
             lane = self.lanes[lane_name]
-            
+
             # is lane green?
             if self.is_yellow:
                 is_green = False
             else:
-                is_green = (lane_name in allowed_lanes)
+                is_green = lane_name in allowed_lanes
 
             # sort cars by position
             lane.sort(key=lambda c: c["position"])
 
-            pos_obstacle_ahead = -9999.0 
+            pos_obstacle_ahead = -9999.0
 
             cars_to_keep = []
 
@@ -223,10 +258,10 @@ class TrafficEnv(gym.Env):
                 current_pos = car["position"]
                 current_speed = car["speed"]
                 turn_intent = car["turn_intent"]
-                
+
                 # identify obstacle car
                 dist_to_car_ahead = current_pos - pos_obstacle_ahead - SAFE_DISTANCE
-                
+
                 # identify obstacle stop line
                 dist_to_stop_line = current_pos - 0.0
 
@@ -245,59 +280,72 @@ class TrafficEnv(gym.Env):
                 # Only check if Green, Turning Left, and near intersection
                 if is_green and turn_intent == "left":
                     if 0 < dist_to_stop_line < 10.0:
-                        if not self._is_gap_safe(lane_name):
+                        if not self._is_gap_safe(car, lane_name):
                             # Treat intersection as blocked wall
                             if dist_to_stop_line < dist_to_car_ahead:
                                 dist_to_target = dist_to_stop_line
                                 target_type = "yield"
 
+                current_max_allowed = MAX_SPEED
+
+                # Reduced speed for turning vehicles
+                if turn_intent != "straight":
+                    MAX_TURN_SPEED = MAX_SPEED * 0.5
+
+                    if current_pos < 20.0:
+                        current_max_allowed = MAX_TURN_SPEED
+
                 # physics calculation
                 if self.enable_physics:
                     # calculate required braking distance: d = v^2 / (2a)
                     if current_speed > 0:
-                        braking_dist_needed = (current_speed**2) / (2 * BRAKING_DECELERATION)
+                        braking_dist_needed = (current_speed**2) / (
+                            2 * BRAKING_DECELERATION
+                        )
                     else:
                         braking_dist_needed = 0
 
-                    # dilemma zone (cant stop in time)
-                    if target_type in ["light", "yield"] and dist_to_target < braking_dist_needed:
-                        dist_to_target = dist_to_car_ahead 
-                    
-                    if dist_to_target > (braking_dist_needed + SAFE_DISTANCE):
-                        # accelerate
-                        new_speed = current_speed + (ACCELERATION * DELTA_T)
-                        new_speed = min(new_speed, MAX_SPEED)
+                    must_brake_for_obstacle = dist_to_target < (
+                        braking_dist_needed + SAFE_DISTANCE
+                    )
 
-                        if current_pos < 10 and turn_intent != "straight":
-                             new_speed = min(new_speed, MAX_SPEED * 0.6)
-                    else:
+                    must_brake_for_turn = (current_speed > current_max_allowed) and (
+                        current_pos < 20.0
+                    )
+
+                    if must_brake_for_obstacle or must_brake_for_turn:
                         # brake
-                        new_speed = current_speed - (BRAKING_DECELERATION * DELTA_T)
-                        new_speed = max(0.0, new_speed)
+                        new_speed = max(
+                            0.0, current_speed - (BRAKING_DECELERATION * DELTA_T)
+                        )
+                    else:
+                        # accelerate
+                        # use current_max_allowed to respect turn speed
+                        new_speed = min(
+                            current_speed + (ACCELERATION * DELTA_T),
+                            current_max_allowed,
+                        )
 
                     move_dist = new_speed * DELTA_T
-                    
+
                     # make sure cars stop at obstacle/stop line
                     real_dist_to_obstacle = current_pos - pos_obstacle_ahead
-                    
+
                     if target_type in ["light", "yield"]:
                         real_dist_to_obstacle = dist_to_stop_line
 
                     if move_dist > (real_dist_to_obstacle - 0.1):
                         move_dist = max(0.0, real_dist_to_obstacle - 0.1)
-                        new_speed = 0.0 # Force stop
+                        new_speed = 0.0  # Force stop
 
                     car["speed"] = new_speed
-
-                    move_dist = new_speed * DELTA_T
-
                 else:
                     # Fallback to old instant movement logic
                     dist_to_move = MAX_SPEED * DELTA_T
                     if dist_to_target <= 0:
                         move_dist = 0
                     else:
-                        move_dist = min(dist_to_move, dist_to_target)
+                        move_dist = min(dist_to_move, dist_to_target - 0.1)
                     car["speed"] = MAX_SPEED if move_dist > 0 else 0
 
                 # update position
