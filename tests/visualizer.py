@@ -1,93 +1,271 @@
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import numpy as np
+
+# ==========================================
+# Visualization Constants
+# ==========================================
+LANE_WIDTH = 4.0
+ASPHALT_COLOR = "#4B4B4B"
+MARKING_COLOR = "#E0E0E0"
+
 
 class TrafficVisualizer:
     def __init__(self, road_length=100):
         plt.ion()
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
         self.road_length = road_length
-        
-        # FIXED MAPPING:
-        # Format: "LaneID": (Static_Axis_Val, Travel_Direction)
-        self.lane_config = {
-            "N2S": {"static_axis": -2, "direction": 1},  # x=-2, y = pos * 1
-            "S2N": {"static_axis": 2,  "direction": -1}, # x= 2, y = pos * -1
-            "E2W": {"static_axis": 2,  "direction": 1},  # y= 2, x = pos * 1  <-- WAS 2!
-            "W2E": {"static_axis": -2, "direction": -1} # y=-2, x = pos * -1 <-- WAS -2!
+        self.colors = {
+            "straight": "#3498db",  # Blau
+            "left": "#e67e22",  # Orange
+            "right": "#2ecc71",  # Grün
         }
-        
-        self.colors = {"straight": "blue", "left": "orange", "right": "green"}
+
+    def _get_lane_coordinates(self, lane_id, position, layout):
+        """Berechnet Position des Autos (identisch zu vorher)."""
+        direction = None
+        index = 0
+        for d, lanes in layout.items():
+            if lane_id in lanes:
+                direction = d
+                index = lanes.index(lane_id)
+                break
+
+        if direction is None:
+            return 0, 0
+
+        # Offset (Mitte der Spur)
+        # 0=Innen, 1=Außen
+        center_gap = 0.2
+        lateral_offset = center_gap + (index * LANE_WIDTH) + (LANE_WIDTH / 2)
+
+        # WICHTIG: Das Auto-Position-System (Physics) nutzt 0.0 als Haltelinie.
+        # Wir müssen das Auto visuell an die *richtige* Haltelinie verschieben.
+        # Das machen wir aber dynamisch im update-Loop.
+        # Hier geben wir erst mal nur den relativen Abstand zurück.
+
+        return direction, lateral_offset, position
+
+    def _calculate_road_geometry(self, layout):
+        """Berechnet die Breiten der Straßenarme."""
+        n_count = len(layout.get("N", ["A"]))
+        s_count = len(layout.get("S", ["A"]))
+        e_count = len(layout.get("E", ["A"]))
+        w_count = len(layout.get("W", ["A"]))
+
+        width_ns = max(n_count, s_count) * LANE_WIDTH
+        width_ew = max(e_count, w_count) * LANE_WIDTH
+
+        return width_ns, width_ew
+
+    def _draw_road_network(self, width_ns, width_ew):
+        """Zeichnet Asphalt und Markierungen."""
+        L = self.road_length
+
+        # Intersection Box (Die Grenzen der Kreuzung)
+        limit_ns = width_ew  # Wie weit geht die horiz. Straße nach oben/unten?
+        limit_ew = width_ns  # Wie weit geht die vert. Straße nach links/rechts?
+
+        # 1. ASPHALT
+        # Vertikal
+        self.ax.add_patch(
+            patches.Rectangle(
+                (-width_ns, -L), 2 * width_ns, 2 * L, color=ASPHALT_COLOR, zorder=0
+            )
+        )
+        # Horizontal
+        self.ax.add_patch(
+            patches.Rectangle(
+                (-L, -width_ew), 2 * L, 2 * width_ew, color=ASPHALT_COLOR, zorder=0
+            )
+        )
+        # Mitte (Fixiert Artefakte)
+        self.ax.add_patch(
+            patches.Rectangle(
+                (-width_ns, -width_ew),
+                2 * width_ns,
+                2 * width_ew,
+                color=ASPHALT_COLOR,
+                zorder=0,
+            )
+        )
+
+        # 2. MARKIERUNGEN
+        def draw_dashed(x, y):
+            self.ax.plot(
+                x,
+                y,
+                color=MARKING_COLOR,
+                linestyle="--",
+                linewidth=1,
+                alpha=0.6,
+                zorder=1,
+            )
+
+        def draw_solid_yellow(x, y):
+            self.ax.plot(
+                x, y, color="#F1C40F", linestyle="-", linewidth=2, alpha=0.9, zorder=1
+            )
+
+        # N/S Linien (Unterbrochen durch E/W Breite)
+        draw_solid_yellow([0, 0], [limit_ns, L])  # Oben
+        draw_solid_yellow([0, 0], [-L, -limit_ns])  # Unten
+
+        # E/W Linien (Unterbrochen durch N/S Breite)
+        draw_solid_yellow([limit_ew, L], [0, 0])  # Rechts
+        draw_solid_yellow([-L, -limit_ew], [0, 0])  # Links
+
+        # Dashed Lines für Spuren könnten hier ergänzt werden...
+        # (Aus Platzgründen gekürzt, da die Logik identisch zu vorher ist)
+
+    def _draw_traffic_lights(self, env, layout, width_ns, width_ew):
+        """
+        Zeichnet Ampeln pro Spur an der korrekten Position.
+        """
+        # Wo müssen die Autos halten?
+        # N/S hält vor der Breite von E/W (+ kleiner Puffer)
+        stop_y_pos = width_ew + 1.0
+        stop_x_pos = width_ns + 1.0
+
+        # Welche Lanes dürfen fahren?
+        active_green_lanes = env.green_phases[env.current_phase]
+
+        # Iteriere durch alle definierten Lanes im Layout
+        for direction, lane_names in layout.items():
+            for idx, lane_name in enumerate(lane_names):
+
+                # 1. FARBE BESTIMMEN
+                color = "#E74C3C"  # Rot (Default)
+
+                if lane_name in active_green_lanes:
+                    if env.is_yellow:
+                        color = "#F1C40F"  # Gelb
+                    else:
+                        color = "#2ECC71"  # Grün (Hell)
+
+                # 2. POSITION BERECHNEN
+                # Lateral Offset (Seitlich)
+                center_gap = 0.2
+                lateral = center_gap + (idx * LANE_WIDTH) + (LANE_WIDTH / 2)
+
+                # Koordinaten für den Strich
+                if direction == "N":
+                    # Oben, hält bei y = +stop_y_pos. Strich ist horizontal.
+                    # x ist links der Achse (-lateral)
+                    x_center = -lateral
+                    y_center = stop_y_pos
+                    self.ax.plot(
+                        [x_center - 1.5, x_center + 1.5],
+                        [y_center, y_center],
+                        color=color,
+                        lw=5,
+                        zorder=5,
+                    )
+
+                elif direction == "S":
+                    # Unten, hält bei y = -stop_y_pos
+                    x_center = lateral
+                    y_center = -stop_y_pos
+                    self.ax.plot(
+                        [x_center - 1.5, x_center + 1.5],
+                        [y_center, y_center],
+                        color=color,
+                        lw=5,
+                        zorder=5,
+                    )
+
+                elif direction == "E":
+                    # Rechts, hält bei x = +stop_x_pos. Strich ist vertikal.
+                    x_center = stop_x_pos
+                    y_center = lateral
+                    self.ax.plot(
+                        [x_center, x_center],
+                        [y_center - 1.5, y_center + 1.5],
+                        color=color,
+                        lw=5,
+                        zorder=5,
+                    )
+
+                elif direction == "W":
+                    # Links, hält bei x = -stop_x_pos
+                    x_center = -stop_x_pos
+                    y_center = -lateral
+                    self.ax.plot(
+                        [x_center, x_center],
+                        [y_center - 1.5, y_center + 1.5],
+                        color=color,
+                        lw=5,
+                        zorder=5,
+                    )
 
     def update(self, env):
         self.ax.clear()
-        
-        # 1. Setup Background (Roads)
-        L = self.road_length
-        # Draw the grey asphalt
-        self.ax.fill_between([-4, 4], -L, L, color='gray', alpha=0.3)
-        self.ax.fill_between([-L, L], -4, 4, color='gray', alpha=0.3)
-        
-        # 2. Draw Stop Lines / Traffic Lights
-        # VISUAL TWEAK: Move the stop lines OUT from the center (0,0)
-        # We draw them at +/- 4 meters instead of 0
-        STOP_LINE_OFFSET = 4.0 
-        
-        ns_color = 'green' if env.current_phase == 0 else 'red'
-        ew_color = 'green' if env.current_phase == 1 else 'red'
-        
-        if env.is_yellow:
-            ns_color = 'yellow' if env.current_phase == 0 else 'red'
-            ew_color = 'yellow' if env.current_phase == 1 else 'red'
+        self.ax.set_facecolor("#C8E6C9")
 
-        # NS Lights (Horizontal lines at y = +/- 4)
-        self.ax.plot([-4, 4], [STOP_LINE_OFFSET, STOP_LINE_OFFSET], color=ns_color, linewidth=5, alpha=0.7)   # Top (N2S)
-        self.ax.plot([-4, 4], [-STOP_LINE_OFFSET, -STOP_LINE_OFFSET], color=ns_color, linewidth=5, alpha=0.7) # Bottom (S2N)
-        
-        # EW Lights (Vertical lines at x = +/- 4)
-        self.ax.plot([STOP_LINE_OFFSET, STOP_LINE_OFFSET], [-4, 4], color=ew_color, linewidth=5, alpha=0.7)   # Right (E2W)
-        self.ax.plot([-STOP_LINE_OFFSET, -STOP_LINE_OFFSET], [-4, 4], color=ew_color, linewidth=5, alpha=0.7) # Left (W2E)
+        layout = env.config["lanes"]
 
-        # 3. Draw Cars with Offset
+        # 1. Geometrie berechnen
+        w_ns, w_ew = self._calculate_road_geometry(layout)
+
+        # 2. Straße zeichnen
+        self._draw_road_network(w_ns, w_ew)
+
+        # 3. Ampeln zeichnen (NEU & DYNAMISCH)
+        self._draw_traffic_lights(env, layout, w_ns, w_ew)
+
+        # 4. Autos zeichnen
+        # Puffer für Stop-Position (damit Auto an der Linie steht, nicht in der Kreuzung)
+        stop_offset_ns = w_ew + 1.0
+        stop_offset_ew = w_ns + 1.0
+
         for lane_id, cars in env.lanes.items():
-            if lane_id not in self.lane_config: continue
-            
-            cfg = self.lane_config[lane_id]
-            static_val = cfg["static_axis"]
-            direction = cfg["direction"]
-            
-            x_vals = []
-            y_vals = []
-            c_vals = []
-            
+            x_vals, y_vals, c_vals = [], [], []
+
+            # Helper call
+            res = self._get_lane_coordinates(lane_id, 0, layout)
+            if res == (0, 0):
+                continue
+            direction, lateral, _ = res
+
             for car in cars:
+                # Physics Position: 0.0 = Stop Line.
+                # Visual Position: Stop Offset + Position
                 pos = car["position"]
-                intent = car.get("turn_intent", "straight")
-                
-                # VISUAL TWEAK: Add the offset to the position
-                # If pos=0 (at physics stop line), visual pos becomes 4.0 (at visual stop line)
-                visual_pos = pos + STOP_LINE_OFFSET
-                
-                # Coordinate Mapping
-                if lane_id in ["N2S", "S2N"]:
-                    x = static_val
-                    y = visual_pos * direction 
+
+                if direction == "N":
+                    x = -lateral
+                    y = stop_offset_ns + pos
+                elif direction == "S":
+                    x = lateral
+                    y = -(stop_offset_ns + pos)
+                elif direction == "E":
+                    x = stop_offset_ew + pos
+                    y = lateral
+                elif direction == "W":
+                    x = -(stop_offset_ew + pos)
+                    y = -lateral
                 else:
-                    x = visual_pos * direction 
-                    y = static_val
+                    x, y = 0, 0
 
                 x_vals.append(x)
                 y_vals.append(y)
-                c_vals.append(self.colors.get(intent, "blue"))
+                c_vals.append(
+                    self.colors.get(car.get("turn_intent", "straight"), "blue")
+                )
 
             if x_vals:
-                self.ax.scatter(x_vals, y_vals, c=c_vals, s=50, edgecolors='white', zorder=10)
+                self.ax.scatter(
+                    x_vals, y_vals, c=c_vals, s=70, edgecolors="black", zorder=10
+                )
 
-        # 4. Final Formatting
-        self.ax.set_xlim(-L, L)
-        self.ax.set_ylim(-L, L)
-        self.ax.set_aspect('equal') # Ensures 1 meter is 1 meter everywhere
-        self.ax.set_title(f"Phase: {env.current_phase} | Time: {env.time_in_phase:.1f}s")
-        self.ax.grid(True, linestyle=':', alpha=0.6)
-        
+        # Settings
+        zoom = 50
+        self.ax.set_xlim(-zoom, zoom)
+        self.ax.set_ylim(-zoom, zoom)
+        self.ax.set_aspect("equal")
+        self.ax.set_title(
+            f"Phase: {env.current_phase} | Time: {env.time_in_phase:.1f}s"
+        )
+
         plt.draw()
         plt.pause(0.001)
