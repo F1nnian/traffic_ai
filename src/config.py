@@ -25,6 +25,8 @@ ACCELERATION = 2.0          # m/s^2 (Standard car acceleration)
 BRAKING_DECELERATION = 4.5  # m/s^2 (Standard braking)
 SAFE_DISTANCE = 2.0         # Meters buffer between cars
 
+MIN_SAFE_TIME_GAP = 3.0 # seconds for turning
+
 SCENARIOS = {
     "SIMPLE": {
         "description": "Original setup: 2 Lanes, Simple Physics, Asymmetric Traffic",
@@ -56,7 +58,33 @@ SCENARIOS = {
             "E2W": 0.3, "W2E": 0.3
         },
         "sq_wait_buckets": [1, 1500, 5000] # Higher buckets for more cars
-    }
+    },
+
+    "TURNING_DEFAULT": {
+        "lanes": ["N2S", "S2N", "E2W", "W2E"],
+        "green_phases": [["N2S", "S2N"], ["E2W", "W2E"]],
+        "traffic_intensity": {
+            "N2S": 0.4, "S2N": 0.4, 
+            "E2W": 0.3, "W2E": 0.3
+        },
+        "sq_wait_buckets": [10, 50, 100, 200, 500],
+        "enable_physics": True,
+
+        "opposing_lanes": {
+            "N2S": "S2N",
+            "S2N": "N2S",
+            "E2W": "W2E",
+            "W2E": "E2W"
+        },
+        
+        # Balanced probabilities: 10% Left, 10% Right, 80% Straight
+        "turning_ratios": {
+            "N2S": {"left": 0.1, "straight": 0.8, "right": 0.1},
+            "S2N": {"left": 0.1, "straight": 0.8, "right": 0.1},
+            "E2W": {"left": 0.1, "straight": 0.8, "right": 0.1},
+            "W2E": {"left": 0.1, "straight": 0.8, "right": 0.1}
+        }
+    },
 }
 
 # Default Configuration
