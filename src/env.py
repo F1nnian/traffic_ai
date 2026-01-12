@@ -12,7 +12,7 @@ from src.config import (
     ACCELERATION,
     BRAKING_DECELERATION,
     SAFE_DISTANCE,
-    STEPS_PER_ACTION,
+    MAX_STEPS_PER_EPISODE,
     SCENARIOS,
     DEFAULT_CONFIG,
     MIN_SAFE_TIME_GAP,
@@ -48,10 +48,13 @@ class TrafficEnv(gym.Env):
         self.action_space = spaces.Discrete(2)
 
         self.observation_space = spaces.MultiDiscrete(
-            [len(self.green_phases)] + [len(self.buckets) + 1] * len(self.lane_ids)
+            [len(self.green_phases)]
+            + [24]
+            + [len(self.buckets) + 1] * len(self.lane_ids)
         )
 
         self.current_phase = 0  # 0: NS Green, 1: EW Green
+        self.total_steps = 0
         self.time_in_phase = 0  # Track seconds to enforce min duration/yellow
         self.is_yellow = False
 
@@ -61,6 +64,7 @@ class TrafficEnv(gym.Env):
 
         # Reset internal state
         self.current_phase = 0
+        self.total_steps = 0
         self.time_in_phase = 0
         self.is_yellow = False
         self.lanes = {name: [] for name in self.lane_ids}
@@ -71,6 +75,7 @@ class TrafficEnv(gym.Env):
         return observation, info
 
     def step(self, action):
+        self.total_steps += 1
 
         num_phases = len(self.green_phases)
 
@@ -109,9 +114,12 @@ class TrafficEnv(gym.Env):
         reward = -total_sq_wait
         observation = self._get_obs(lane_waits)
 
+        terminated = self.total_steps >= MAX_STEPS_PER_EPISODE
+        truncated = False
+
         info = {f"queue_{k}": len(v) for k, v in self.lanes.items()}
 
-        return observation, reward, False, False, info
+        return observation, reward, terminated, truncated, info
 
     def render(self):
         status = "yellow" if self.is_yellow else "green"
@@ -131,6 +139,10 @@ class TrafficEnv(gym.Env):
         # 1. Phase
         obs = [self.current_phase]
 
+        steps_per_hour = MAX_STEPS_PER_EPISODE / 24
+        virtual_hour = int(self.total_steps // steps_per_hour)
+        obs.append(min(virtual_hour, 23))
+
         # 2. Buckets for each lane
         for w in lane_waits:
             bucket = np.digitize(w, self.buckets)
@@ -138,9 +150,27 @@ class TrafficEnv(gym.Env):
 
         return np.array(obs, dtype=np.int32)
 
+    def _get_current_intensity(self, route_data):
+        # Calculate virtual hour (0-23)
+        steps_per_hour = MAX_STEPS_PER_EPISODE / 24
+        virtual_hour = int(self.total_steps // steps_per_hour)
+        virtual_hour = min(virtual_hour, 23)
+
+        # Extract schedule and find current intensity
+        schedule = route_data["schedule"]
+        current_i = schedule[0][1]
+
+        for hour, intensity in schedule:
+            if virtual_hour >= hour:
+                current_i = intensity
+            else:
+                break
+
+        return current_i
+
     def _spawn_cars(self):
         for route_id, data in self.routes.items():
-            if self.np_random.random() < (data["i"] * DELTA_T):
+            if self.np_random.random() < (self._get_current_intensity(data) * DELTA_T):
                 self.lanes[data["lane"]].append(
                     {
                         "position": float(ROAD_LENGTH),

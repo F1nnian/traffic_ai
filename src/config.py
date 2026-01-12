@@ -4,7 +4,6 @@ from src.scenarios import SCENARIOS
 # 1. Simulation Settings
 # Seconds per simulation step
 DELTA_T = 0.1  # needs to be small in order for physics to work
-STEPS_PER_ACTION = 10  # AI acts every 10 steps (every second)
 
 
 # Length of the road in meters (per arm of the intersection)
@@ -48,7 +47,7 @@ SQ_WAIT_BUCKETS = [1, 900, 3600]
 
 # 3. Training Settings
 NUM_EPISODES = 1000
-MAX_STEPS_PER_EPISODE = 300  # Max steps per episode (5 minutes of simulation)
+MAX_STEPS_PER_EPISODE = 14400  # Max steps per episode (maps to 24 hours of simulation, for 14400 steps: 1s real time -> 1 minute simulated time)
 
 
 # 4. File Paths

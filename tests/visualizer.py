@@ -202,6 +202,17 @@ class TrafficVisualizer:
         self.ax.clear()
         self.ax.set_facecolor("#C8E6C9")
 
+        # --- CALCULATE VIRTUAL TIME ---
+        # Reuse the logic from your environment
+        from src.config import MAX_STEPS_PER_EPISODE
+
+        steps_per_hour = MAX_STEPS_PER_EPISODE / 24
+        virtual_hour = int(env.total_steps // steps_per_hour)
+        virtual_hour = min(virtual_hour, 23)
+
+        # Format as string for the clock (e.g., "08:00")
+        clock_str = f"{virtual_hour:02d}:00"
+
         layout = env.config["lanes"]
 
         # 1. Geometrie berechnen
@@ -258,13 +269,28 @@ class TrafficVisualizer:
                     x_vals, y_vals, c=c_vals, s=70, edgecolors="black", zorder=10
                 )
 
-        # Settings
         zoom = 50
         self.ax.set_xlim(-zoom, zoom)
         self.ax.set_ylim(-zoom, zoom)
         self.ax.set_aspect("equal")
+
+        # Updated Title with Clock
+        status = "YELLOW" if env.is_yellow else "GREEN"
         self.ax.set_title(
-            f"Phase: {env.current_phase} | Time: {env.time_in_phase:.1f}s"
+            f"TIME: {clock_str} | Phase: {env.current_phase} ({status})",
+            fontsize=14,
+            fontweight="bold",
+        )
+
+        # Optional: Add a stylized clock box in the top-right corner
+        self.ax.text(
+            zoom - 2,
+            zoom - 5,
+            f"VIRTUAL CLOCK\n{clock_str}",
+            bbox=dict(facecolor="white", alpha=0.8, edgecolor="black"),
+            fontsize=10,
+            ha="right",
+            family="monospace",
         )
 
         plt.draw()
