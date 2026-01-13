@@ -24,8 +24,13 @@ class TrafficEnv(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, config_name="SIMPLE"):
+    def __init__(self, config_name="SIMPLE", obs_mode="log", 
+                 include_hour=True, include_queue=True):
         super(TrafficEnv, self).__init__()
+
+        self.obs_mode = obs_mode         
+        self.include_hour = include_hour
+        self.include_queue = include_queue
 
         if config_name in SCENARIOS:
             self.config = SCENARIOS[config_name]
@@ -45,12 +50,19 @@ class TrafficEnv(gym.Env):
         self.buckets = self.config["sq_wait_buckets"]
         self.enable_physics = self.config["enable_physics"]
 
+        # action space
         self.action_space = spaces.Discrete(2)
 
-        self.observation_space = spaces.MultiDiscrete(
-            [len(self.green_phases)]
-            + [24]
-            + [len(self.buckets) + 1] * len(self.lane_ids)
+        # dynamic observation space
+        num_lane_features = len(self.lane_ids)
+        extra_dims = (1 if include_hour else 0) + (1 if include_queue else 0)
+        total_size = 1 + num_lane_features + extra_dims
+
+        # Bounds: Bucketed returns integers, Log/Continuous return floats 0.0-1.0
+        high_val = 1.0 if obs_mode in ["log", "continuous"] else float(len(self.buckets))
+        
+        self.observation_space = spaces.Box(
+            low=0, high=high_val, shape=(total_size,), dtype=np.float32
         )
 
         self.current_phase = 0  # 0: NS Green, 1: EW Green
@@ -136,19 +148,62 @@ class TrafficEnv(gym.Env):
         if lane_waits is None:
             lane_waits = [0] * len(self.lane_ids)
 
-        # 1. Phase
-        obs = [self.current_phase]
+        # 1. Phase normalized to 0-1
+        num_phases = len(self.green_phases)
+        if num_phases > 1:
+            phase_normalized = float(self.current_phase) / (num_phases - 1)
+        else:
+            phase_normalized = 0.0
+        obs = [phase_normalized]
 
-        steps_per_hour = MAX_STEPS_PER_EPISODE / 24
-        virtual_hour = int(self.total_steps // steps_per_hour)
-        obs.append(min(virtual_hour, 23))
-
-        # 2. Buckets for each lane
+        # 2. wait times either bucketed or linearly/logarithmically normalized
+        max_sq_wait = self.buckets[-1]
         for w in lane_waits:
-            bucket = np.digitize(w, self.buckets)
-            obs.append(bucket)
+            if self.obs_mode == "bucketed":
+                val = float(np.digitize(w, self.buckets))
+            elif self.obs_mode == "log":
+                # Compresses the squared values effectively for the NN
+                val = np.log1p(w) / np.log1p(max_sq_wait)
+                val = np.clip(val, 0.0, 1.0)
+            else: # continuous/linear
+                val = np.clip(w / max_sq_wait, 0, 1)
+            obs.append(float(val))
 
-        return np.array(obs, dtype=np.int32)
+        # 3. optional queue length
+        if self.include_queue:
+            for lane_name in self.lane_ids:
+                q_len = len(self.lanes[lane_name])
+
+                if self.obs_mode == "bucketed":
+                    # Define 4 queue levels: Empty(0), Short(1-5), Medium(6-15), Long(>15)
+                    lane_q_buckets = [1, 3, 8]
+                    val = float(np.digitize(q_len, lane_q_buckets))
+                else:
+                    # Normalized against a default max of 20 cars
+                    max_q_per_lane = 20.0
+                    val = min(q_len / max_q_per_lane, 1.0)
+
+                obs.append(val)
+
+        # 4. optional virtual hour
+        if self.include_hour:
+            if self.obs_mode == "bucketed":
+                progress = self.total_steps / MAX_STEPS_PER_EPISODE
+                val = float(int(progress * 6))
+            else:
+                steps_per_hour = MAX_STEPS_PER_EPISODE / 24.0
+                virtual_hour_cont = self.total_steps / steps_per_hour
+                val = min(virtual_hour_cont / 24.0, 1.0)
+            obs.append(val)
+
+        final_obs = np.array(obs, dtype=np.float32)
+        
+        if self.obs_mode == "bucketed":
+            # If you are using a Tabular Q-Table, cast the final array to int
+            # so the agent receives (1, 0, 2, 0, 0) instead of (1.0, 0.0, 2.0...)
+            return final_obs.astype(np.int32)
+        
+        return final_obs
 
     def _get_current_intensity(self, route_data):
         # Calculate virtual hour (0-23)
