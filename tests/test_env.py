@@ -145,5 +145,5 @@ def test_observation_evolution():
     print(">>> EVOLUTION TEST PASSED!")
 
 if __name__ == "__main__":
-    # test_visual_demo()
-    test_observation_evolution()
+    test_visual_demo()
+    # test_observation_evolution()
