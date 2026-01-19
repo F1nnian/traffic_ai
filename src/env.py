@@ -19,18 +19,28 @@ from src.config import (
     MAX_TURN_SPEED,
 )
 
+# map for normalizing turn intents
+INTENT_MAP = {"straight": 0.0, "right": 1.0, "left": 2.0}
+
 
 class TrafficEnv(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, config_name="SIMPLE", obs_mode="log", 
-                 include_hour=True, include_queue=True):
+    def __init__(
+        self,
+        config_name="SIMPLE",
+        obs_mode="log",
+        include_hour=True,
+        include_queue=True,
+        include_intent=True,
+    ):
         super(TrafficEnv, self).__init__()
 
-        self.obs_mode = obs_mode         
+        self.obs_mode = obs_mode
         self.include_hour = include_hour
         self.include_queue = include_queue
+        self.include_intent = include_intent
 
         if config_name in SCENARIOS:
             self.config = SCENARIOS[config_name]
@@ -55,12 +65,18 @@ class TrafficEnv(gym.Env):
 
         # dynamic observation space
         num_lane_features = len(self.lane_ids)
-        extra_dims = (1 if include_hour else 0) + (1 if include_queue else 0)
+        extra_dims = (
+            (1 if include_hour else 0)
+            + (1 if include_queue else 0)
+            + (num_lane_features if include_intent else 0)
+        )
         total_size = 1 + num_lane_features + extra_dims
 
         # Bounds: Bucketed returns integers, Log/Continuous return floats 0.0-1.0
-        high_val = 1.0 if obs_mode in ["log", "continuous"] else float(len(self.buckets))
-        
+        high_val = (
+            1.0 if obs_mode in ["log", "continuous"] else float(len(self.buckets))
+        )
+
         self.observation_space = spaces.Box(
             low=0, high=high_val, shape=(total_size,), dtype=np.float32
         )
@@ -165,7 +181,7 @@ class TrafficEnv(gym.Env):
                 # Compresses the squared values effectively for the NN
                 val = np.log1p(w) / np.log1p(max_sq_wait)
                 val = np.clip(val, 0.0, 1.0)
-            else: # continuous/linear
+            else:  # continuous/linear
                 val = np.clip(w / max_sq_wait, 0, 1)
             obs.append(float(val))
 
@@ -185,6 +201,22 @@ class TrafficEnv(gym.Env):
 
                 obs.append(val)
 
+        # 4. optional turn intent
+        if self.include_intent:
+            for lane_name in self.lane_ids:
+                lane_cars = self.lanes[lane_name]
+                intent_val = 0.0  # Default if no cars
+                if len(lane_cars) > 0:
+                    lead_car = lane_cars[0]
+                    intent = lead_car["turn_intent"]
+
+                    if self.obs_mode == "bucketed":
+                        intent_val = INTENT_MAP[intent]
+                    else:
+                        intent_val = INTENT_MAP[intent] / 2.0  # normalize to 0.0-1.0
+
+                obs.append(intent_val)
+
         # 4. optional virtual hour
         if self.include_hour:
             if self.obs_mode == "bucketed":
@@ -197,12 +229,12 @@ class TrafficEnv(gym.Env):
             obs.append(val)
 
         final_obs = np.array(obs, dtype=np.float32)
-        
+
         if self.obs_mode == "bucketed":
             # If you are using a Tabular Q-Table, cast the final array to int
             # so the agent receives (1, 0, 2, 0, 0) instead of (1.0, 0.0, 2.0...)
             return final_obs.astype(np.int32)
-        
+
         return final_obs
 
     def _get_current_intensity(self, route_data):
