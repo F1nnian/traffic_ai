@@ -15,7 +15,6 @@ from src.config import (
     MAX_STEPS_PER_EPISODE,
     SCENARIOS,
     DEFAULT_CONFIG,
-    MIN_SAFE_TIME_GAP,
     MAX_TURN_SPEED,
 )
 
@@ -277,77 +276,84 @@ class TrafficEnv(gym.Env):
     def _is_gap_safe(self, car, current_lane):
         car_route_id = car["route_id"]
         current_speed = car["speed"]
-        # 1. Check Protected Phase (Green Arrow -> Always Safe)
+        # protected phase
         if self.current_phase in self.protected_phases:
             if current_lane in self.green_phases[self.current_phase]:
                 return True
 
-        # 2. Check Yield Map
+        # yield map lookup
         conflicting_routes = self.yield_map.get(car_route_id, [])
         if not conflicting_routes:
             return True
 
-        dist_to_clear = 18.0  # Distance to clear intersection
+        dist_to_clear = 11.0
 
-        # Calculate time to clear intersection
+        # calculate crossing time
         v_start = min(current_speed, MAX_TURN_SPEED)
 
         t_cross = (
             -v_start + math.sqrt(v_start**2 + 2 * ACCELERATION * dist_to_clear)
         ) / ACCELERATION
 
+        # calculate required gap (time to cross + buffer)
         required_gap = t_cross + 1.5
 
-        # 3. Identify physical lanes to check (avoid duplicates)
+        # identify physical lanes to check
         lanes_to_scan = set()
         for r_id in conflicting_routes:
             route_data = self.routes.get(r_id)
             if route_data:
                 lanes_to_scan.add(route_data["lane"])
 
-        # 4. Scan Lanes
+        # scan each relevant lane for threat vehicles
         for lane_name in lanes_to_scan:
             all_cars = self.lanes.get(lane_name, [])
 
-            # Look only at cars near the intersection
-            approaching = [c for c in all_cars if c["position"] > -25.0]
+            # make sure to consider cars who have not yet crossed the intersection
+            approaching = [c for c in all_cars if c["position"] > -10.0]
 
             if not approaching:
                 continue
 
-            # Extract lead vehicle
+            # sort by position
             approaching.sort(key=lambda c: c["position"])
-            lead_vehicle = approaching[0]
 
+            # Identify threat vehicle
             threat_vehicle = None
 
-            # If the lead vehicle is turning left
+            # check lead vehicle first
+            lead_vehicle = approaching[0]
+
             if lead_vehicle["turn_intent"] == "left":
-                # Check the shadow vehicle behind
-                if len(approaching) > 1:
-                    shadow_vehicle = approaching[1]
+                for i in range(1, len(approaching)):
+                    shadow_vehicle = approaching[i]
                     if shadow_vehicle["route_id"] in conflicting_routes:
                         threat_vehicle = shadow_vehicle
-                else:
-                    continue
+                        break
 
-            # If the lead vehicle is going straight or right
             elif lead_vehicle["route_id"] in conflicting_routes:
                 threat_vehicle = lead_vehicle
 
-            if threat_vehicle:
+            # no threat vehicle found in this lane
+            if not threat_vehicle:
+                continue
 
-                if threat_vehicle["speed"] < 1.0 and threat_vehicle["position"] > -5.0:
-                    continue
+            # ignore stopped vehicles far from intersection
+            if threat_vehicle["speed"] < 1.0 and threat_vehicle["position"] > 5.0:
+                continue
 
-                # Calculate Time To Arrival
-                if threat_vehicle["speed"] > 0.1:
-                    t_pos = max(0.1, threat_vehicle["position"])
-                    tta = t_pos / threat_vehicle["speed"]
+            # calculate TTA
+            threat_pos = threat_vehicle["position"]
+            threat_speed = threat_vehicle["speed"]
 
-                    if tta < required_gap:
-                        return False
+            if threat_speed > 0.1:
+                t_pos = max(0.1, threat_pos)
+                tta = t_pos / threat_speed
 
+                if tta < required_gap:
+                    return False
+
+        # all lanes clear
         return True
 
     def _move_cars(self):
@@ -407,8 +413,6 @@ class TrafficEnv(gym.Env):
 
                 # Reduced speed for turning vehicles
                 if turn_intent != "straight":
-                    MAX_TURN_SPEED = MAX_SPEED * 0.5
-
                     if current_pos < 20.0:
                         current_max_allowed = MAX_TURN_SPEED
 

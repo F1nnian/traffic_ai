@@ -15,7 +15,7 @@ def test_visual_demo():
     print(">>> STARTING VISUAL DEMO...")
 
     # 1. Setup Env with Turning Traffic | Options: SIMPLE, BIDIRECTIONAL, SHARED_LANES, DEDICATED_LANES, RUSH_HOUR
-    env = TrafficEnv(config_name="RUSH_HOUR")
+    env = TrafficEnv(config_name="SHARED_LANES", obs_mode="visual")
 
     env.reset()
 
@@ -192,5 +192,5 @@ def test_observation_evolution():
 
 
 if __name__ == "__main__":
-    # test_visual_demo()
-    test_observation_evolution()
+    test_visual_demo()
+    # test_observation_evolution()

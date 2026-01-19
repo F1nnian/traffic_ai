@@ -24,7 +24,7 @@ MAX_SPEED = 14  # m/s (approx 50 km/h)
 ACCELERATION = 2.0  # m/s^2 (Standard car acceleration)
 BRAKING_DECELERATION = 4.5  # m/s^2 (Standard braking)
 SAFE_DISTANCE = 2.0  # Meters buffer between cars
-MAX_TURN_SPEED = 7.0  # m/s when turning at intersection
+MAX_TURN_SPEED = MAX_SPEED / 2.0  # m/s when turning at intersection
 
 MIN_SAFE_TIME_GAP = 3.0  # seconds for turning
 

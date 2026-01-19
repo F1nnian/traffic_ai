@@ -269,7 +269,7 @@ class TrafficVisualizer:
                     x_vals, y_vals, c=c_vals, s=70, edgecolors="black", zorder=10
                 )
 
-        zoom = 50
+        zoom = 100
         self.ax.set_xlim(-zoom, zoom)
         self.ax.set_ylim(-zoom, zoom)
         self.ax.set_aspect("equal")
