@@ -27,10 +27,10 @@ SCENARIOS = {
         "description": "4 Lanes (N2S, S2N, ...), Symmetric Traffic",
         "lanes": {"N": ["N2S"], "S": ["S2N"], "E": ["E2W"], "W": ["W2E"]},
         "routes": {
-            "N2S": {"schedule": [(0, 0.3)], "lane": "N2S", "intent": "straight"},
-            "S2N": {"schedule": [(0, 0.3)], "lane": "S2N", "intent": "straight"},
-            "E2W": {"schedule": [(0, 0.3)], "lane": "E2W", "intent": "straight"},
-            "W2E": {"schedule": [(0, 0.3)], "lane": "W2E", "intent": "straight"},
+            "N2S": {"schedule": [(0, 0.215)], "lane": "N2S", "intent": "straight"},
+            "S2N": {"schedule": [(0, 0.215)], "lane": "S2N", "intent": "straight"},
+            "E2W": {"schedule": [(0, 0.13)], "lane": "E2W", "intent": "straight"},
+            "W2E": {"schedule": [(0, 0.13)], "lane": "W2E", "intent": "straight"},
         },
         "green_phases": {
             0: ["N2S", "S2N"],  # Phase 0: North/South move
@@ -46,21 +46,21 @@ SCENARIOS = {
         # Logical Routes (Intensity, Physical Target Lane, Intent)
         "routes": {
             # North Approach
-            "N2S": {"schedule": [(0, 0.4)], "lane": "N", "intent": "straight"},
-            "N2E": {"schedule": [(0, 0.1)], "lane": "N", "intent": "left"},
-            "N2W": {"schedule": [(0, 0.1)], "lane": "N", "intent": "right"},
+            "N2S": {"schedule": [(0, 0.105)], "lane": "N", "intent": "straight"},
+            "N2E": {"schedule": [(0, 0.032)], "lane": "N", "intent": "left"},
+            "N2W": {"schedule": [(0, 0.018)], "lane": "N", "intent": "right"},
             # South Approach
-            "S2N": {"schedule": [(0, 0.4)], "lane": "S", "intent": "straight"},
-            "S2W": {"schedule": [(0, 0.1)], "lane": "S", "intent": "left"},
-            "S2E": {"schedule": [(0, 0.1)], "lane": "S", "intent": "right"},
+            "S2N": {"schedule": [(0, 0.105)], "lane": "S", "intent": "straight"},
+            "S2W": {"schedule": [(0, 0.032)], "lane": "S", "intent": "left"},
+            "S2E": {"schedule": [(0, 0.018)], "lane": "S", "intent": "right"},
             # East Approach
-            "E2W": {"schedule": [(0, 0.3)], "lane": "E", "intent": "straight"},
-            "E2S": {"schedule": [(0, 0.1)], "lane": "E", "intent": "left"},
-            "E2N": {"schedule": [(0, 0.1)], "lane": "E", "intent": "right"},
+            "E2W": {"schedule": [(0, 0.080)], "lane": "E", "intent": "straight"},
+            "E2S": {"schedule": [(0, 0.023)], "lane": "E", "intent": "left"},
+            "E2N": {"schedule": [(0, 0.012)], "lane": "E", "intent": "right"},
             # West Approach
-            "W2E": {"schedule": [(0, 0.3)], "lane": "W", "intent": "straight"},
-            "W2N": {"schedule": [(0, 0.1)], "lane": "W", "intent": "left"},
-            "W2S": {"schedule": [(0, 0.1)], "lane": "W", "intent": "right"},
+            "W2E": {"schedule": [(0, 0.080)], "lane": "W", "intent": "straight"},
+            "W2N": {"schedule": [(0, 0.023)], "lane": "W", "intent": "left"},
+            "W2S": {"schedule": [(0, 0.012)], "lane": "W", "intent": "right"},
         },
         # Conflict Map: Route X must yield to Route Y
         # (Left turners yield to oncoming straight/right traffic)
@@ -88,21 +88,21 @@ SCENARIOS = {
         # Logical Routes map to specific exclusive lanes
         "routes": {
             # North
-            "N2S": {"schedule": [(0, 0.45)], "lane": "N_Str", "intent": "straight"},
-            "N2W": {"schedule": [(0, 0.10)], "lane": "N_Str", "intent": "right"},
-            "N2E": {"schedule": [(0, 0.15)], "lane": "N_Left", "intent": "left"},
+            "N2S": {"schedule": [(0, 0.082)], "lane": "N_Str", "intent": "straight"},
+            "N2W": {"schedule": [(0, 0.018)], "lane": "N_Str", "intent": "right"},
+            "N2E": {"schedule": [(0, 0.165)], "lane": "N_Left", "intent": "left"},
             # South
-            "S2N": {"schedule": [(0, 0.45)], "lane": "S_Str", "intent": "straight"},
-            "S2E": {"schedule": [(0, 0.10)], "lane": "S_Str", "intent": "right"},
-            "S2W": {"schedule": [(0, 0.15)], "lane": "S_Left", "intent": "left"},
+            "S2N": {"schedule": [(0, 0.082)], "lane": "S_Str", "intent": "straight"},
+            "S2E": {"schedule": [(0, 0.018)], "lane": "S_Str", "intent": "right"},
+            "S2W": {"schedule": [(0, 0.032)], "lane": "S_Left", "intent": "left"},
             # East
-            "E2W": {"schedule": [(0, 0.20)], "lane": "E_Str", "intent": "straight"},
-            "E2N": {"schedule": [(0, 0.10)], "lane": "E_Str", "intent": "right"},
-            "E2S": {"schedule": [(0, 0.10)], "lane": "E_Left", "intent": "left"},
+            "E2W": {"schedule": [(0, 0.070)], "lane": "E_Str", "intent": "straight"},
+            "E2N": {"schedule": [(0, 0.015)], "lane": "E_Str", "intent": "right"},
+            "E2S": {"schedule": [(0, 0.11)], "lane": "E_Left", "intent": "left"},
             # West
-            "W2E": {"schedule": [(0, 0.20)], "lane": "W_Str", "intent": "straight"},
-            "W2S": {"schedule": [(0, 0.10)], "lane": "W_Str", "intent": "right"},
-            "W2N": {"schedule": [(0, 0.10)], "lane": "W_Left", "intent": "left"},
+            "W2E": {"schedule": [(0, 0.070)], "lane": "W_Str", "intent": "straight"},
+            "W2S": {"schedule": [(0, 0.015)], "lane": "W_Str", "intent": "right"},
+            "W2N": {"schedule": [(0, 0.11)], "lane": "W_Left", "intent": "left"},
         },
         # Conflict Map (Logic remains identical to Shared scenario)
         "yield_map": {
@@ -130,30 +130,48 @@ SCENARIOS = {
             # North-South: Main Commuter Route
             "N2S": {
                 "schedule": [
-                    (0, 0.05),  # Midnight: Very quiet
-                    (6, 0.20),  # Early morning: Waking up
-                    (7, 0.85),  # Morning Rush peak
-                    (10, 0.30),  # Midday: Steady flow
-                    (16, 0.75),  # Evening Rush peak
-                    (19, 0.20),  # Evening: Tapering off
-                    (22, 0.05),  # Night: Quiet again
+                    (0, 0.030),
+                    (6, 0.085),
+                    (7, 0.230),
+                    (10, 0.120),
+                    (16, 0.210),
+                    (19, 0.085),
+                    (22, 0.035),
                 ],
                 "lane": "N2S",
                 "intent": "straight",
             },
             "S2N": {
-                "schedule": [(0, 0.05), (7, 0.85), (10, 0.30), (16, 0.75), (22, 0.05)],
+                "schedule": [
+                    (0, 0.030),
+                    (7, 0.230),
+                    (10, 0.120),
+                    (16, 0.210),
+                    (22, 0.035),
+                ],
                 "lane": "S2N",
                 "intent": "straight",
             },
             # East-West: Side Streets (Lower overall intensity)
             "E2W": {
-                "schedule": [(0, 0.02), (8, 0.40), (11, 0.20), (17, 0.50), (21, 0.05)],
+                "schedule": [
+                    (0, 0.020),
+                    (8, 0.110),
+                    (11, 0.075),
+                    (17, 0.125),
+                    (21, 0.030),
+                ],
                 "lane": "E2W",
                 "intent": "straight",
             },
             "W2E": {
-                "schedule": [(0, 0.02), (8, 0.40), (11, 0.20), (17, 0.50), (21, 0.05)],
+                "schedule": [
+                    (0, 0.020),
+                    (8, 0.110),
+                    (11, 0.075),
+                    (17, 0.125),
+                    (21, 0.030),
+                ],
                 "lane": "W2E",
                 "intent": "straight",
             },
