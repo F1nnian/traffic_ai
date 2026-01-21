@@ -34,20 +34,20 @@ DEFAULT_CONFIG = SCENARIOS["SIMPLE"]
 # 2. Reinforcement Learning Settings
 # Q-Learning Parameters
 ALPHA = 0.1  # Learning Rate
-GAMMA = 0.95  # Discount Factor
+GAMMA = 0.99  # Discount Factor
 
 # Exploration (Epsilon-Greedy)
 EPSILON_START = 1.0  # Initial exploration rate
 EPSILON_MIN = 0.01
-EPSILON_DECAY = 0.995  # How fast epsilon decreases per episode
+EPSILON_DECAY = 0.99  # How fast epsilon decreases per episode
 
 # Discretization Buckets for Sum of Squared Waiting Times
 SQ_WAIT_BUCKETS = [1, 900, 3600]
 
 
 # 3. Training Settings
-NUM_EPISODES = 1000
-MAX_STEPS_PER_EPISODE = 14400  # Max steps per episode (maps to 24 hours of simulation, for 14400 steps: 1s real time -> 1 minute simulated time)
+NUM_EPISODES = 500
+MAX_STEPS_PER_EPISODE = 3600  # Max steps per episode (maps to 24 hours of simulation, for 14400 steps: 1s real time -> 1 minute simulated time)
 
 
 # 4. File Paths

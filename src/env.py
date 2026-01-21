@@ -66,7 +66,7 @@ class TrafficEnv(gym.Env):
         num_lane_features = len(self.lane_ids)
         extra_dims = (
             (1 if include_hour else 0)
-            + (1 if include_queue else 0)
+            + (num_lane_features if include_queue else 0)
             + (num_lane_features if include_intent else 0)
         )
         total_size = 1 + num_lane_features + extra_dims
@@ -129,17 +129,44 @@ class TrafficEnv(gym.Env):
         self._spawn_cars()
         self._move_cars()
 
-        # Calculate Reward
-        total_sq_wait = 0
-        lane_waits = []
+        total_queue_length = 0
+        max_wait_time = 0
+        lane_waits_for_obs = []
 
-        for lane_name in self.lane_ids:
-            w = sum([c["wait_time"] ** 2 for c in self.lanes[lane_name]])
-            total_sq_wait += w
-            lane_waits.append(w)  # Collect for observation
+        # Iterate through lane IDs to ensure consistent order for observation
+        for lane_id in self.lane_ids:
+            cars = self.lanes[lane_id]
 
-        reward = -total_sq_wait
-        observation = self._get_obs(lane_waits)
+            # 1. Queue Length (Just the count of cars in the list)
+            q_len = len(cars)
+            total_queue_length += q_len
+
+            # 2. Wait Times
+            current_lane_max_wait = 0.0
+            current_lane_total_wait = 0.0
+
+            if q_len > 0:
+                # Extract wait times from car dictionaries
+                # car is a dict: {"wait_time": 5.5, ...}
+                waits = [c["wait_time"] for c in cars]
+
+                current_lane_max_wait = max(waits)
+                current_lane_total_wait = sum(waits)
+
+                # Update global max wait for the penalty
+                if current_lane_max_wait > max_wait_time:
+                    max_wait_time = current_lane_max_wait
+
+            # Save total wait for this lane (needed for self._get_obs)
+            lane_waits_for_obs.append(current_lane_total_wait)
+
+        # --- THE HYBRID FORMULA ---
+        # Alpha balances Throughput vs. Fairness
+        alpha = 0.5
+        reward = -(total_queue_length + (alpha * max_wait_time))
+
+        # Pass the calculated lane waits to the observation generation
+        observation = self._get_obs(lane_waits_for_obs)
 
         terminated = self.total_steps >= MAX_STEPS_PER_EPISODE
         truncated = False
@@ -216,7 +243,7 @@ class TrafficEnv(gym.Env):
 
                 obs.append(intent_val)
 
-        # 4. optional virtual hour
+        # 5. optional virtual hour
         if self.include_hour:
             if self.obs_mode == "bucketed":
                 progress = self.total_steps / MAX_STEPS_PER_EPISODE
