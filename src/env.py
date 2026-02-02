@@ -66,7 +66,7 @@ class TrafficEnv(gym.Env):
         num_lane_features = len(self.lane_ids)
         extra_dims = (
             (1 if include_hour else 0)
-            + (1 if include_queue else 0)
+            + (num_lane_features if include_queue else 0)
             + (num_lane_features if include_intent else 0)
         )
         total_size = 1 + num_lane_features + extra_dims
