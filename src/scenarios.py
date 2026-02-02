@@ -22,7 +22,6 @@ SCENARIOS = {
         # RL Buckets
         "sq_wait_buckets": [1, 1500, 5000],
     },
-    # Placeholder for future issues
     "BIDIRECTIONAL": {
         "description": "4 Lanes (N2S, S2N, ...), Symmetric Traffic",
         "lanes": {"N": ["N2S"], "S": ["S2N"], "E": ["E2W"], "W": ["W2E"]},
